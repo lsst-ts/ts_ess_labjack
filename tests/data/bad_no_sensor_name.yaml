@@ -1,0 +1,6 @@
+identifier: test.foo.bar
+topics: 
+  - topic_name: tel_temperature
+    field_name: temperature
+    location: none, here
+    channel_names: ["", "AIN2"]

@@ -1,0 +1,40 @@
+{% set data= load_setup_py_data() %}
+package:
+  name: ts-ess-labjack
+  version: {{ data.get('version') }}
+
+source:
+  path: ../
+
+build:
+  script: python -m pip install --no-deps --ignore-installed .
+
+test:
+  requires:
+    - ts-conda-build =0.3
+    - ts-idl {{ idl_version }}
+    - ts-utils
+    - ts-salobj {{ salobj_version }}
+  source_files:
+    - python
+    - bin
+    - tests
+    - setup.cfg
+  commands:
+    - py.test
+
+requirements:
+  host:
+    - python
+    - pip
+    - setuptools_scm
+    - setuptools
+    - pytest-runner
+  run:
+    - python
+    - setuptools
+    - setuptools_scm
+    - ts-idl
+    - ts-salobj
+    - ts-utils
+    - ts-ess-common

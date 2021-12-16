@@ -1,0 +1,2 @@
+@Library('JenkinsShared')_
+CondaPipeline([], "ts-ess-labjack", "lsst.ts.ess.labjack", "noarch")
