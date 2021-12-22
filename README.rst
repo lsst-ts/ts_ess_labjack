@@ -16,5 +16,5 @@ Assuming you have the basic DM stack installed you can do the following, from wi
   This requires ``documenteer``; see `building single package docs <https://developer.lsst.io/stack/building-single-package-docs.html>`_ for installation instructions.
 
 
-This code uses ``pre-commit`` to maintain ``black`` formatting and ``flake8`` compliance.
+This code uses ``pre-commit`` to maintain ``black`` formatting and ``flake8`` and ``mypy`` compliance.
 To enable this: run ``pre-commit install`` once.
