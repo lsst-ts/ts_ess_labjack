@@ -1,4 +1,4 @@
-identifier: test.foo.bar
+host: test.foo.bar
 topics: 
   - sensor_name: labjack_test_1
     field_name: temperature

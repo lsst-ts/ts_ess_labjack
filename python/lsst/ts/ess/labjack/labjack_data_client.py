@@ -47,8 +47,11 @@ CONNECT_TIMEOUT = 5
 # and reading telemetry (seconds)
 READ_TIMEOUT = 5
 
-# LabJack's special identifier to run in simulation mode.
-MOCK_IDENTIFIER = "LJM_DEMO_MODE"
+# LabJack's connection type for TCP/IP
+CONNECTION_TYPE = "TCP"
+
+# LabJack's special "identifier" to run in simulation mode
+MOCK_HOST = "LJM_DEMO_MODE"
 
 
 class LabJackDataClient(common.BaseDataClient):
@@ -115,16 +118,8 @@ properties:
     description: LabJack model
     type: string
     default: T7
-  connection_type:
-    description: Connection type
-    type: string
-    default: TCP
-  identifier:
-    description: >-
-        LabJack indentifier:
-        * An IP address if connection_type=TCP
-        * A serial number if connection_type = USB
-        * For testing in an environment with only one LabJack you may use ANY.
+  host:
+    description: IP address of LabJack
   poll_interval:
     description: Polling interval (seconds)
     type: number
@@ -181,8 +176,7 @@ properties:
       additionalProperties: false
 required:
   - device_type
-  - connection_type
-  - identifier
+  - host
   - poll_interval
   - topics
 additionalProperties: false
@@ -231,7 +225,7 @@ additionalProperties: false
         self.channel_names = tuple(sorted(channel_names))
 
     def descr(self) -> str:
-        return f"identifier={self.config.identifier}"
+        return f"host={self.config.host}"
 
     async def run_in_thread(self, func: Callable[[], Any], timeout: float) -> Any:
         """Run a blocking function in a thread pool executor.
@@ -298,13 +292,11 @@ additionalProperties: false
             self._blocking_disconnect()
 
         if self.simulation_mode == 0:
-            identifier = self.config.identifier
+            host = self.config.host
         else:
-            identifier = MOCK_IDENTIFIER
+            host = MOCK_HOST
 
-        self.handle = ljm.openS(
-            self.config.device_type, self.config.connection_type, identifier
-        )
+        self.handle = ljm.openS(self.config.device_type, CONNECTION_TYPE, host)
         self._blocking_read()
 
     def _blocking_disconnect(self) -> None:

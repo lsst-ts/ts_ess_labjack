@@ -1,6 +1,5 @@
 device_type: T4
-connection_type: USB
-identifier: test.foo.bar
+host: test.foo.bar
 poll_interval: 0.2
 topics: 
   - topic_name: tel_temperature
