@@ -33,8 +33,6 @@ User Guide
 
 To make `LabJackDataClient` available to the ESS CSC you must install this package and the LabJack software.
 
-We plan to create a conda package for the LabJack software, but until then you must manually install the labjack-ljm library and Python wrapper as follows:
-
 * Download the appropriate labjack-ljm installer from https://labjack.com/support/software/installers/ljm
 * Install according to these directions: https://labjack.com/support/software/installers/ljm/ljm-installation-instructions
 * Install the Python wrapper using ``pip install labjack-ljm``.
