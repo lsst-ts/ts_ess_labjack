@@ -34,7 +34,7 @@ setuptools.setup(
     name="ts_ess_labjack",
     description="An ESS data client for LabJack-connected environment sensors",
     use_scm_version={
-        "write_to": "python/lsst/ts/ess/csc/version.py",
+        "write_to": "python/lsst/ts/ess/labjack/version.py",
         "write_to_template": scm_version_template,
     },
     setup_requires=["setuptools_scm"],
