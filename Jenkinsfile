@@ -56,7 +56,11 @@ pipeline {
                         cd /home/saluser/repos/ts_idl
                         /home/saluser/.checkout_repo.sh ${work_branches}
                         git pull
+                        cd /home/saluser/repos
+                        git clone https://github.com/lsst-ts/ts_ess_common.git
                         cd /home/saluser/repos/ts_ess_common
+                        eups declare -r . ts_ess_common git -t current  # to run tests
+                        pip install --ignore-installed -e .  # to build docs
                         /home/saluser/.checkout_repo.sh ${work_branches}
                         git pull
                         make_idl_files.py ESS
