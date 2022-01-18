@@ -1,4 +1,4 @@
-host: test.foo.bar
+identifier: test.foo.bar
 topics: 
   - topic_name: tel_temperature
     sensor_name: labjack_test_1

@@ -53,6 +53,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
 
         # Check against the values in file good_full.yaml
         assert config.device_type == "T4"
+        assert config.connection_type == "USB"
         assert config.poll_interval == 0.2
         assert len(config.topics) == 3
         topics = [types.SimpleNamespace(**topic_dict) for topic_dict in config.topics]
@@ -85,6 +86,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
 
         # Check against the values in file good_minimal.yaml
         assert config.device_type == "T7"
+        assert config.connection_type == "TCP"
         assert config.poll_interval == 1
         assert len(config.topics) == 1
         topics = [types.SimpleNamespace(**topic_dict) for topic_dict in config.topics]

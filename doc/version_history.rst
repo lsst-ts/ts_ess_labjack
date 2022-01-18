@@ -6,6 +6,7 @@
 Version History
 ###############
 
-The current state is prerelease.
-The code is feature-complete and the unit tests pass if you manually install the labjack lvm library and Python wrapper (see the User Guide for instructions).
-But we don't have that available for Jenkins.
+v0.1.0
+------
+
+* The first release.
