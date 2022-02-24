@@ -6,6 +6,11 @@
 Version History
 ###############
 
+v0.2.0
+------
+
+* Update for ts_salobj 7.
+
 v0.1.0
 ------
 
