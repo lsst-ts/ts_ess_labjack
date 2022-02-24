@@ -132,7 +132,7 @@ class TopicHandler:
             )
         self.num_channels = max(i for i in self.channel_dict) + 1
 
-    def put_data(self, data_dict: Dict[str, float]) -> None:
+    async def put_data(self, data_dict: Dict[str, float]) -> None:
         """Write data to the topic.
 
         Parameters
@@ -145,7 +145,7 @@ class TopicHandler:
         for i, channel_name in self.channel_dict.items():
             data_arr[i] = self.offset + self.scale * data_dict[channel_name]
         data_kwarg = {self.field_name: data_arr}
-        self.topic.set_put(
+        await self.topic.set_write(
             sensorName=self.sensor_name,
             timestamp=utils.current_tai(),
             location=self.location,
