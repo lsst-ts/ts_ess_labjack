@@ -76,7 +76,7 @@ class MockEssArrayTopic:
         )
         self.data_dict: Dict[str, Any] = dict()
 
-    def set_put(
+    async def set_write(
         self,
         sensorName: str,
         timestamp: float,
