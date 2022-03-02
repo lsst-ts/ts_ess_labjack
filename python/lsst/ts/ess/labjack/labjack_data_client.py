@@ -281,7 +281,7 @@ additionalProperties: false
                 func=self._blocking_read, timeout=READ_TIMEOUT
             )
             for topic_handler in self.topic_handlers.values():
-                topic_handler.put_data(data_dict)
+                await topic_handler.put_data(data_dict)
             # Support unit testing with a future the test can reset.
             self.wrote_event.set()
             await asyncio.sleep(self.config.poll_interval)
