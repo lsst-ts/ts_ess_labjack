@@ -15,9 +15,10 @@ test:
     - ts-idl {{ idl_version }}
     - ts-utils
     - ts-salobj {{ salobj_version }}
+    - labjack-ljm
+    - labjack
   source_files:
     - python
-    - bin
     - tests
     - setup.cfg
   commands:
