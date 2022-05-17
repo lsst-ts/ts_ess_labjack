@@ -6,6 +6,11 @@
 Version History
 ###############
 
+v0.2.1
+------
+
+* Fix conda build.
+
 v0.2.0
 ------
 
