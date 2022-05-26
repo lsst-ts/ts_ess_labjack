@@ -126,6 +126,7 @@ properties:
         * A host name or IP address if connection_type = TCP or WIFI
         * A serial number if connection_type = USB
         * For testing in an environment with only one LabJack you may use ANY
+    type: string
   poll_interval:
     description: Polling interval (seconds)
     type: number
