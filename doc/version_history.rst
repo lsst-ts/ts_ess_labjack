@@ -6,6 +6,13 @@
 Version History
 ###############
 
+v0.3.0
+------
+
+* `LabJackDataClient`: add DNS name resolution.
+* git ignore ``.hypothesis``.
+* ``setup.cfg``: add ``asyncio_mode = auto``.
+
 v0.2.1
 ------
 

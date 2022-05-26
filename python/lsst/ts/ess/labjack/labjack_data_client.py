@@ -26,6 +26,7 @@ __all__ = ["LabJackDataClient"]
 import asyncio
 import concurrent
 import logging
+import socket
 import types
 from typing import Any, Callable, Dict, Union, Sequence, Set, Tuple, TYPE_CHECKING
 
@@ -122,9 +123,10 @@ properties:
   identifier:
     description: >-
         LabJack indentifier:
-        * An IP address if connection_type=TCP
+        * A host name or IP address if connection_type = TCP or WIFI
         * A serial number if connection_type = USB
-        * For testing in an environment with only one LabJack you may use ANY.
+        * For testing in an environment with only one LabJack you may use ANY
+    type: string
   poll_interval:
     description: Polling interval (seconds)
     type: number
@@ -263,6 +265,11 @@ additionalProperties: false
         RuntimeError
             If we cannot read the data.
         """
+        self.log.info(
+            f"Connect to LabJack {self.config.device_type}, "
+            f"config.identifier={self.config.identifier!r}, "
+            f"config.connection_type={self.config.connection_type}"
+        )
         await self.run_in_thread(func=self._blocking_connect, timeout=CONNECT_TIMEOUT)
 
     async def disconnect(self) -> None:
@@ -299,8 +306,13 @@ additionalProperties: false
 
         if self.simulation_mode == 0:
             identifier = self.config.identifier
+            if self.config.connection_type in {"TCP", "WIFI"}:
+                # Resolve domain name, since ljm does not do this
+                identifier = socket.gethostbyname(identifier)
+                self.log.info(f"resolved identifier={identifier!r}")
         else:
             identifier = MOCK_IDENTIFIER
+            self.log.info(f"simulation mode, so identifier changed to {identifier!r}")
 
         self.handle = ljm.openS(
             self.config.device_type, self.config.connection_type, identifier

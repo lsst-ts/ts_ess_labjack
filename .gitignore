@@ -15,10 +15,10 @@ version.py
 # Pytest
 tests/.tests
 pytest_session.txt
-.cache/
+.cache
 .pytest_cache
 .coverage
-ospl-error.log
-ospl-info.log
+.hypothesis
+*.log
 
 .idea/
