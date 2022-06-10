@@ -6,6 +6,13 @@
 Version History
 ###############
 
+v0.4.0
+------
+
+* Build with pyproject.toml.
+* Modernize the continuous integration Jenkinsfile
+* .pre-commit-config.yaml: update versions.
+
 v0.3.0
 ------
 
