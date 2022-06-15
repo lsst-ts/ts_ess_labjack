@@ -24,7 +24,7 @@
 This configuration only affects single-package Sphinx documentation builds.
 """
 
-from documenteer.conf.pipelinespkg import *  # noqa
+from documenteer.conf.pipelinespkg import *  # type: ignore # noqa
 
 import lsst.ts.ess.labjack  # noqa
 
