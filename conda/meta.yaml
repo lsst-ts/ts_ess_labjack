@@ -17,7 +17,6 @@ test:
     - ts-utils
     - ts-salobj {{ salobj_version }}
     - labjack-ljm
-    - labjack
   source_files:
     - python
     - tests
