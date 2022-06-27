@@ -22,9 +22,7 @@
 __all__ = ["LabJackDataClient"]
 
 import asyncio
-import concurrent
 import logging
-import socket
 import types
 from collections.abc import Sequence
 from typing import Any
@@ -36,21 +34,14 @@ import yaml
 from lsst.ts import salobj
 from .base_labjack_data_client import BaseLabJackDataClient
 from .topic_handler import TopicHandler
-from lsst.ts.ess import common
-
-# Time limit for connecting to the LabJack (seconds)
-CONNECT_TIMEOUT = 5
 
 # Time limit for communicating with the LabJack (seconds)
 # This includes writing a command and reading the response
 # and reading telemetry (seconds)
 READ_TIMEOUT = 5
 
-# LabJack's special identifier to run in simulation mode.
-MOCK_IDENTIFIER = "LJM_DEMO_MODE"
 
-
-class LabJackDataClient(common.BaseDataClient):
+class LabJackDataClient(BaseLabJackDataClient):
     """Get environmental data from a LabJack T7 or similar.
 
     Parameters
@@ -80,11 +71,9 @@ class LabJackDataClient(common.BaseDataClient):
         log: logging.Logger,
         simulation_mode: int = 0,
     ) -> None:
-        self.device_configurations: dict[str, Any] = dict()
-
-        # handle to LabJack device
-        self.handle = None
-
+        super().__init__(
+            config=config, topics=topics, log=log, simulation_mode=simulation_mode
+        )
         self.channel_names: Sequence[str] = []
 
         # dict of (topic_attr_name, sensor_name): TopicHandler
@@ -94,12 +83,6 @@ class LabJackDataClient(common.BaseDataClient):
         # A test can clear the event, then wait for it to be set.
         self.wrote_event = asyncio.Event()
 
-        # The thread pool executor used by `run_in_thread`.
-        self._thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-
-        super().__init__(
-            config=config, topics=topics, log=log, simulation_mode=simulation_mode
-        )
         self.configure()
 
     @classmethod
@@ -230,55 +213,6 @@ additionalProperties: false
             channel_names |= new_channel_names
         self.channel_names = tuple(sorted(channel_names))
 
-    def descr(self) -> str:
-        return f"identifier={self.config.identifier}"
-
-    async def run_in_thread(self, func: Callable[[], Any], timeout: float) -> Any:
-        """Run a blocking function in a thread pool executor.
-
-        Only one function will run at a time, because all calls use the same
-        thread pool executor, which only has a single thread.
-
-        Parameters
-        ----------
-        func : `Callable`
-            The blocking function to run;
-            The function must take no arguments.
-            For example: ``self._blocking_read``.
-        timeout : `float`
-            Time limit (seconds).
-        """
-        loop = asyncio.get_running_loop()
-        return await asyncio.wait_for(
-            loop.run_in_executor(self._thread_pool, func), timeout=timeout
-        )
-
-    async def connect(self) -> None:
-        """Connect to the LabJack and check we can read the specified channels.
-
-        Disconnect first, if connected.
-
-        Raises
-        ------
-        RuntimeError
-            If we cannot read the data.
-        """
-        self.log.info(
-            f"Connect to LabJack {self.config.device_type}, "
-            f"config.identifier={self.config.identifier!r}, "
-            f"config.connection_type={self.config.connection_type}"
-        )
-        await self.run_in_thread(func=self._blocking_connect, timeout=CONNECT_TIMEOUT)
-
-    async def disconnect(self) -> None:
-        """Disconnect from the LabJack. A no-op if disconnected."""
-        try:
-            await self.run_in_thread(
-                func=self._blocking_disconnect, timeout=CONNECT_TIMEOUT
-            )
-        finally:
-            self.handle = None
-
     async def run(self) -> None:
         """Read and process data from the LabJack."""
         while True:
@@ -292,41 +226,13 @@ additionalProperties: false
             await asyncio.sleep(self.config.poll_interval)
 
     def _blocking_connect(self) -> None:
-        """Connect to the LabJack and check we can read the specified channels.
+        """Connect and then read the specified channels.
 
-        Disconnect first, if connected.
-
-        Call in a thread to avoid blocking the event loop.
+        This makes sure that the configured channels can be read.
         """
-        if self.handle is not None:
-            self.log.warning("Already connected; disconnecting and reconnecting")
-            self._blocking_disconnect()
-
-        if self.simulation_mode == 0:
-            identifier = self.config.identifier
-            if self.config.connection_type in {"TCP", "WIFI"}:
-                # Resolve domain name, since ljm does not do this
-                identifier = socket.gethostbyname(identifier)
-                self.log.info(f"resolved identifier={identifier!r}")
-        else:
-            identifier = MOCK_IDENTIFIER
-            self.log.info(f"simulation mode, so identifier changed to {identifier!r}")
-
-        self.handle = ljm.openS(
-            self.config.device_type, self.config.connection_type, identifier
-        )
+        # Read each input channel, to make sure the configuration is valid
+        super()._blocking_connect()
         self._blocking_read()
-
-    def _blocking_disconnect(self) -> None:
-        """Disconnect from the LabJack. A no-op if disconnected.
-
-        Call in a thread to avoid blocking the event loop.
-        """
-        if self.handle is not None:
-            try:
-                ljm.close(self.handle)
-            finally:
-                self.handle = None
 
     def _blocking_read(self) -> dict[str, float]:
         """Read data from the LabJack. This can block.

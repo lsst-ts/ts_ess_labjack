@@ -31,6 +31,7 @@ else:
     except ImportError:
         __version__ = "?"
 
+from .base_labjack_data_client import *
 from .labjack_data_client import *
 from .mock_ess_array_topic import *
 from .topic_handler import *

@@ -48,9 +48,6 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
         self.log = logging.getLogger()
         self.data_dir = pathlib.Path(__file__).parent / "data"
 
-        # Normally the CSC does validation, but we need to do it here
-        # in order to expand defaults (and to reduce the risk of feeding
-        # in an invalid config).
         config_schema = labjack.LabJackDataClient.get_config_schema()
         self.validator = salobj.DefaultingValidator(config_schema)
 
@@ -68,8 +65,8 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
         topics_kwargs = {topic.attr_name: topic for topic in mock_topics}
         self.topics = types.SimpleNamespace(**topics_kwargs)
 
-    def test_constructor_good_full(self) -> None:
-        """Construct with tests/data/good_full.yaml
+    async def test_constructor_good_full(self) -> None:
+        """Construct with good_full.yaml
 
         and compare values to that file.
         Use the default simulation_mode.
@@ -112,8 +109,8 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
         assert topic_handlers[2].num_channels == 2
         assert topic_handlers[2].channel_dict == {1: "AIN6"}
 
-    def test_constructor_good_minimal(self) -> None:
-        """Construct with tests/data/good_minimal.yaml
+    async def test_constructor_good_minimal(self) -> None:
+        """Construct with good_minimal.yaml
 
         and compare values to that file.
         Use the default simulation_mode.
@@ -138,7 +135,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
         assert topic_handlers[0].num_channels == 2
         assert topic_handlers[0].channel_dict == {1: "AIN2"}
 
-    def test_constructor_specify_simulation_mode(self) -> None:
+    async def test_constructor_specify_simulation_mode(self) -> None:
         config = self.get_config("good_minimal.yaml")
         for simulation_mode in (0, 1):
             data_client = labjack.LabJackDataClient(
