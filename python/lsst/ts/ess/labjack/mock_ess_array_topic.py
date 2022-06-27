@@ -22,7 +22,8 @@
 __all__ = ["MockEssArrayTopic"]
 
 import dataclasses
-from typing import Any, Dict, List, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 
 class MockEssArrayTopic:
@@ -39,7 +40,7 @@ class MockEssArrayTopic:
 
     Attributes
     ----------
-    data_dict : `Dict` [`str`, dataclass]
+    data_dict : `dict` [`str`, dataclass]
         The data most recently written by `set_put`
         as a dict of sensor_name: data.
     """
@@ -51,7 +52,7 @@ class MockEssArrayTopic:
         self.field_name = field_name
         self.field_len = field_len
 
-        def get_zeros() -> List[float]:
+        def get_zeros() -> list[float]:
             """Get a list of field_len zeros.
 
             Needed in order to make the default for the array field
@@ -74,7 +75,7 @@ class MockEssArrayTopic:
                 ("location", str, dataclasses.field(default="")),  # type: ignore
             ],
         )
-        self.data_dict: Dict[str, Any] = dict()
+        self.data_dict: dict[str, Any] = dict()
 
     async def set_write(
         self,

@@ -23,7 +23,7 @@ import logging
 import pathlib
 import types
 import unittest
-from typing import Any, Dict, Union
+from typing import Any, TypeAlias
 
 import jsonschema
 import pytest
@@ -32,7 +32,7 @@ import yaml
 from lsst.ts import salobj
 from lsst.ts.ess import labjack
 
-PathT = Union[str, pathlib.Path]
+PathT: TypeAlias = str | pathlib.Path
 
 logging.basicConfig(
     format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG
@@ -109,7 +109,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
         config_dict = self.validator.validate(raw_config_dict)
         return types.SimpleNamespace(**config_dict)
 
-    def get_config_dict(self, filename: PathT) -> Dict[str, Any]:
+    def get_config_dict(self, filename: PathT) -> dict[str, Any]:
         """Get a config dict from tests/data.
 
         Parameters

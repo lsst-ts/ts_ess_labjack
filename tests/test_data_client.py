@@ -25,7 +25,7 @@ import math
 import pathlib
 import unittest
 import types
-from typing import Any, Set, Union
+from typing import Any, TypeAlias
 
 import yaml
 
@@ -37,7 +37,7 @@ logging.basicConfig(
     format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG
 )
 
-PathT = Union[str, pathlib.Path]
+PathT: TypeAlias = str | pathlib.Path
 
 TIMEOUT = 5
 """Standard timeout in seconds."""
@@ -211,7 +211,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
         sensor_name: str,
         field_name: str,
         location: str,
-        good_indices: Set[int],
+        good_indices: set[int],
         expected_len: int,
     ) -> None:
         """Check topic data.
@@ -229,7 +229,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
             Location string.
         field_name: str
             Name of array-valued field.
-        good_indices : `Set` [`int`]
+        good_indices : `set` [`int`]
             Indices of values expected to be finite.
         expected_len : `int`
             Expected length of the array.

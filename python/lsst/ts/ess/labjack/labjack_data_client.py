@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 # This file is part of ts_ess_labjack.
 #
 # Developed for the Vera C. Rubin Observatory Telescope and Site Systems.
@@ -28,17 +26,17 @@ import concurrent
 import logging
 import socket
 import types
-from typing import Any, Callable, Dict, Union, Sequence, Set, Tuple, TYPE_CHECKING
+from collections.abc import Sequence
+from typing import Any
 
 # Hide my error `Module "labjack" has no attribute "ljm"`
 from labjack import ljm  # type: ignore
 import yaml
 
+from lsst.ts import salobj
+from .base_labjack_data_client import BaseLabJackDataClient
 from .topic_handler import TopicHandler
 from lsst.ts.ess import common
-
-if TYPE_CHECKING:
-    from lsst.ts import salobj
 
 # Time limit for connecting to the LabJack (seconds)
 CONNECT_TIMEOUT = 5
@@ -78,19 +76,19 @@ class LabJackDataClient(common.BaseDataClient):
     def __init__(
         self,
         config: types.SimpleNamespace,
-        topics: Union[salobj.Controller, types.SimpleNamespace],
+        topics: salobj.Controller | types.SimpleNamespace,
         log: logging.Logger,
         simulation_mode: int = 0,
     ) -> None:
-        self.device_configurations: Dict[str, Any] = dict()
+        self.device_configurations: dict[str, Any] = dict()
 
         # handle to LabJack device
         self.handle = None
 
         self.channel_names: Sequence[str] = []
 
-        # Dict of (topic_attr_name, sensor_name): TopicHandler
-        self.topic_handlers: Dict[Tuple[str, str], TopicHandler] = dict()
+        # dict of (topic_attr_name, sensor_name): TopicHandler
+        self.topic_handlers: dict[tuple[str, str], TopicHandler] = dict()
 
         # An event that unit tests can use to wait for data to be written.
         # A test can clear the event, then wait for it to be set.
@@ -105,7 +103,7 @@ class LabJackDataClient(common.BaseDataClient):
         self.configure()
 
     @classmethod
-    def get_config_schema(cls) -> Dict[str, Any]:
+    def get_config_schema(cls) -> dict[str, Any]:
         return yaml.safe_load(
             """
 $schema: http://json-schema.org/draft-07/schema#
@@ -198,8 +196,8 @@ additionalProperties: false
 
         This provides easy access when processing telemetry.
         """
-        # Set of all LabJack channel names to read
-        channel_names: Set[str] = set()
+        # set of all LabJack channel names to read
+        channel_names: set[str] = set()
         for topic_info_dict in self.config.topics:
             topic_info = types.SimpleNamespace(**topic_info_dict)
             topic_name = topic_info.topic_name
@@ -330,14 +328,14 @@ additionalProperties: false
             finally:
                 self.handle = None
 
-    def _blocking_read(self) -> Dict[str, float]:
+    def _blocking_read(self) -> dict[str, float]:
         """Read data from the LabJack. This can block.
 
         Call in a thread to avoid blocking the event loop.
 
         Returns
         -------
-        data : `Dict` [`str`, `float`]
+        data : `dict` [`str`, `float`]
             The read data as a dict of channel_name: value.
         """
         if self.handle is None:
