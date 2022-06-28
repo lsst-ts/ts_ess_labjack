@@ -33,5 +33,6 @@ else:
 
 from .base_labjack_data_client import *
 from .labjack_data_client import *
+from .labjack_accelerometer_data_client import *
 from .mock_ess_topics import *
 from .topic_handler import *
