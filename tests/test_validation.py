@@ -48,7 +48,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
         self.config_schema = labjack.LabJackDataClient.get_config_schema()
         self.validator = salobj.DefaultingValidator(self.config_schema)
 
-    def test_good_full(self) -> None:
+    async def test_good_full(self) -> None:
         config = self.get_and_validate_config("good_full.yaml")
 
         # Check against the values in file good_full.yaml
@@ -81,7 +81,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
         assert topics[2].offset == 0
         assert topics[2].scale == 1
 
-    def test_good_minimal(self) -> None:
+    async def test_good_minimal(self) -> None:
         config = self.get_and_validate_config("good_minimal.yaml")
 
         # Check against the values in file good_minimal.yaml
@@ -98,7 +98,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
         assert topics[0].offset == 0
         assert topics[0].scale == 1
 
-    def test_bad(self) -> None:
+    async def test_bad(self) -> None:
         for path in self.data_dir.glob("bad_*.yaml"):
             config_dict = self.get_config_dict(path)
             with pytest.raises(jsonschema.ValidationError):
