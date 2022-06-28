@@ -46,7 +46,9 @@ TIMEOUT = 5
 class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         self.log = logging.getLogger()
-        self.data_dir = pathlib.Path(__file__).parent / "data"
+        self.data_dir = (
+            pathlib.Path(__file__).parent / "data" / "config" / "data_client"
+        )
 
         config_schema = labjack.LabJackDataClient.get_config_schema()
         self.validator = salobj.DefaultingValidator(config_schema)
