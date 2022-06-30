@@ -286,7 +286,7 @@ additionalProperties: false
             raise
 
     def _blocking_start_data_stream(self) -> None:
-        """Start streaming data from the LabJack
+        """Start streaming data from the LabJack.
 
         Call in a thread to avoid blocking the event loop.
         """
@@ -349,7 +349,7 @@ additionalProperties: false
         )
 
     def _blocking_stop_data_stream(self) -> None:
-        """Stop streaming data from the LabJack
+        """Stop streaming data from the LabJack.
 
         Call in a thread to avoid blocking the event loop.
         """

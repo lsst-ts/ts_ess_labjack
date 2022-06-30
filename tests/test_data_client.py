@@ -39,8 +39,8 @@ logging.basicConfig(
 
 PathT: TypeAlias = str | pathlib.Path
 
+# Standard timeout in seconds
 TIMEOUT = 5
-"""Standard timeout in seconds."""
 
 
 class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
@@ -68,9 +68,8 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
         self.topics = types.SimpleNamespace(**topics_kwargs)
 
     async def test_constructor_good_full(self) -> None:
-        """Construct with good_full.yaml
+        """Construct with good_full.yaml and compare values to that file.
 
-        and compare values to that file.
         Use the default simulation_mode.
         """
         config = self.get_config("good_full.yaml")
@@ -112,9 +111,8 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
         assert topic_handlers[2].channel_dict == {1: "AIN6"}
 
     async def test_constructor_good_minimal(self) -> None:
-        """Construct with good_minimal.yaml
+        """Construct with good_minimal.yaml and compare values to that file.
 
-        and compare values to that file.
         Use the default simulation_mode.
         """
         config = self.get_config("good_minimal.yaml")

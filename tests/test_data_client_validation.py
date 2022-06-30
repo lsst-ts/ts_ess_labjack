@@ -38,8 +38,8 @@ logging.basicConfig(
     format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG
 )
 
+# Standard timeout in seconds
 TIMEOUT = 5
-"""Standard timeout in seconds."""
 
 
 class DataClientTestCase(unittest.IsolatedAsyncioTestCase):

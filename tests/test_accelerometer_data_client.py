@@ -40,8 +40,8 @@ logging.basicConfig(
 
 PathT: TypeAlias = str | pathlib.Path
 
+# Standard timeout in seconds.
 TIMEOUT = 5
-"""Standard timeout in seconds."""
 
 
 class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
@@ -63,9 +63,8 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
         self.topics = types.SimpleNamespace(**{self.topic.attr_name: self.topic})
 
     async def test_constructor_good_full(self) -> None:
-        """Construct with good_full.yaml
+        """Construct with good_full.yaml and compare values to that file.
 
-        and compare values to that file.
         Use the default simulation_mode.
         """
         config = self.get_config("good_full.yaml")
@@ -80,9 +79,8 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
         assert data_client.modbus_addresses == [0, 4, 10]
 
     async def test_constructor_good_minimal(self) -> None:
-        """Construct with good_minimal.yaml
+        """Construct with good_minimal.yaml and compare values to that file.
 
-        and compare values to that file.
         Use the default simulation_mode.
         """
         config = self.get_config("good_minimal.yaml")
@@ -108,7 +106,10 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
             assert data_client.simulation_mode == simulation_mode
 
     async def test_basic_operation(self) -> None:
-        """Test operation with random PSDs"""
+        """Test operation with random PSDs.
+
+        Since the PSDs are random, don't try to check the PSD data.
+        """
         config = self.get_config("good_full.yaml")
         data_client = labjack.LabJackAccelerometerDataClient(
             config=config, topics=self.topics, log=self.log, simulation_mode=1
@@ -137,7 +138,7 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
         assert data_client.run_task.done()
 
     async def test_power_spectral_density(self) -> None:
-        """Test operation with expected PSDs"""
+        """Test operation with expected PSDs."""
         config = self.get_config("good_full.yaml")
         data_client = labjack.LabJackAccelerometerDataClient(
             config=config, topics=self.topics, log=self.log, simulation_mode=1
