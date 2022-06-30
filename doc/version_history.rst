@@ -6,6 +6,13 @@
 Version History
 ###############
 
+v0.5.0
+------
+
+* Add `LabJackAccelerometerDataClient` and `BaseLabJackDataClient`.
+* Enable mypy type checking.
+* Update type annotations for Python 3.10.
+
 v0.4.0
 ------
 
