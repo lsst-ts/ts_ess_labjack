@@ -3,9 +3,9 @@ connection_type: USB
 identifier: test.foo.bar
 sensor_name: alt_accel
 location: somewhere
-# These min_frequency and max_frequency values can both be exactly
-# used bu the data client, which is relied on by test_operation 
-# in test_acceleration_data_client.py.
+# These min_frequency, max_frequency, and num_frequencies values are assumed
+# in test_acceleration_data_client.py, and they produce nice round PSD frequencies,
+# which makes the data easier to understand.
 min_frequency: 20
 max_frequency: 500
 num_frequencies: 97

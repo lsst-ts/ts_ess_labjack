@@ -118,7 +118,7 @@ class TopicHandler:
         if not isinstance(field_data, list):
             raise ValueError(f"Field {topic.attr_name}.{field_name} is not array")
         self.array_len = len(field_data)
-        # dict of array index: LabJack channel name
+        # dict of array index: LabJack channel name.
         self.channel_dict = {i: name for i, name in enumerate(channel_names) if name}
         bad_indices = [i for i in self.channel_dict if i >= self.array_len]
         if bad_indices:

@@ -159,7 +159,7 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
 
         # These values are all based on the exact configuration
         # in good_full.yaml, which were chosen to give rounded values
-        # for PSD frequencies and an exact match between one of those
+        # for PSD frequencies and an exact match between one of those.
         # frequencies and config.min_frequency.
         assert data_client.psd_start_index == 4
         assert data_client.num_samples == 200
@@ -167,10 +167,10 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
             data_client.psd_frequencies, np.linspace(start=0, stop=500, num=101)
         )
         num_samples = data_client.num_samples
-        # Generate mock raw data
+        # Generate mock raw data.
         # Pick an arbitrary collection of frequencies for each axis.
         # In order to simplify the code and interpretation of the result,
-        # make each frequency match one of the frequencies
+        # make each frequency match one of the frequencies.
         # of the reported PSD and make them all the same amplitude.
         axis_frequencies: dict[str, list[float]] = dict()
         assert data_client.config.min_frequency == pytest.approx(
@@ -183,7 +183,7 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
         raw_2d_data = np.zeros(shape=(3, num_samples))
         # Dict of axis: list of frequency indices
         # where each index is relative to the full frequency array
-        # (rather than the subset published)
+        # (rather than the subset published).
         frequency_indices = dict(
             X=[4, 10, 60],
             Y=[5, 17],
@@ -217,7 +217,7 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
 
         data_client.mock_raw_1d_data = raw_1d_data
 
-        # Wait for data to be written, then check it
+        # Wait for data to be written, then check it.
         data_client.wrote_event.clear()
         await asyncio.wait_for(data_client.wrote_event.wait(), timeout=TIMEOUT)
 

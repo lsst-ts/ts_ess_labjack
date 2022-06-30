@@ -57,7 +57,7 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
     async def test_good_full(self) -> None:
         config = self.get_and_validate_config("good_full.yaml")
 
-        # Check against the values in file good_full.yaml
+        # Check against the values in file good_full.yaml.
         assert config.device_type == "T4"
         assert config.connection_type == "USB"
         assert config.sensor_name == "alt_accel"
@@ -71,7 +71,7 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
     async def test_good_minimal(self) -> None:
         config = self.get_and_validate_config("good_minimal.yaml")
 
-        # Check against the values in file good_minimal.yaml
+        # Check against the values in file good_minimal.yaml.
         assert config.device_type == "T7"
         assert config.connection_type == "TCP"
         assert config.sensor_name == "accel"
@@ -103,8 +103,8 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
         config = self.get_and_validate_config("good_minimal.yaml")
         good_config_dict = vars(config)
 
-        # Test the wrong number of analog inputs
-        # Pick a subset of inputs from a list of arbitrary valid inputs
+        # Test the wrong number of analog inputs.
+        # Pick a subset of inputs from a list of arbitrary valid inputs.
         arbitrary_valid_inputs = [2, 1, 0, 3, 5, 8, 9, 21]
         for bad_num_analog_inputs in range(7):
             if bad_num_analog_inputs == 3:
@@ -115,7 +115,7 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
             with pytest.raises(jsonschema.ValidationError):
                 self.validator.validate(bad_config_dict)
 
-        # Test negative analog inputs
+        # Test negative analog inputs.
         for bad_value, index in itertools.product((-1, -2, -10), (0, 1, 2)):
             bad_config_dict = good_config_dict.copy()
             bad_config_dict["analog_inputs"][index] = bad_value

@@ -53,7 +53,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
     async def test_good_full(self) -> None:
         config = self.get_and_validate_config("good_full.yaml")
 
-        # Check against the values in file good_full.yaml
+        # Check against the values in file good_full.yaml.
         assert config.device_type == "T4"
         assert config.connection_type == "USB"
         assert config.poll_interval == 0.2
@@ -86,7 +86,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
     async def test_good_minimal(self) -> None:
         config = self.get_and_validate_config("good_minimal.yaml")
 
-        # Check against the values in file good_minimal.yaml
+        # Check against the values in file good_minimal.yaml.
         assert config.device_type == "T7"
         assert config.connection_type == "TCP"
         assert config.poll_interval == 1

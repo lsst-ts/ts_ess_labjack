@@ -27,7 +27,7 @@ import types
 from collections.abc import Sequence
 from typing import Any
 
-# Hide my error `Module "labjack" has no attribute "ljm"`
+# Hide mypy error `Module "labjack" has no attribute "ljm"`.
 from labjack import ljm  # type: ignore
 import yaml
 
@@ -35,9 +35,9 @@ from lsst.ts import salobj
 from .base_labjack_data_client import BaseLabJackDataClient
 from .topic_handler import TopicHandler
 
-# Time limit for communicating with the LabJack (seconds)
+# Time limit for communicating with the LabJack (seconds).
 # This includes writing a command and reading the response
-# and reading telemetry (seconds)
+# and reading telemetry (seconds).
 READ_TIMEOUT = 5
 
 
@@ -76,7 +76,7 @@ class LabJackDataClient(BaseLabJackDataClient):
         )
         self.channel_names: Sequence[str] = []
 
-        # dict of (topic_attr_name, sensor_name): TopicHandler
+        # dict of (topic_attr_name, sensor_name): TopicHandler.
         self.topic_handlers: dict[tuple[str, str], TopicHandler] = dict()
 
         # An event that unit tests can use to wait for data to be written.
@@ -179,7 +179,7 @@ additionalProperties: false
 
         This provides easy access when processing telemetry.
         """
-        # set of all LabJack channel names to read
+        # set of all LabJack channel names to read.
         channel_names: set[str] = set()
         for topic_info_dict in self.config.topics:
             topic_info = types.SimpleNamespace(**topic_info_dict)
@@ -230,7 +230,7 @@ additionalProperties: false
 
         This makes sure that the configured channels can be read.
         """
-        # Read each input channel, to make sure the configuration is valid
+        # Read each input channel, to make sure the configuration is valid.
         super()._blocking_connect()
         self._blocking_read()
 

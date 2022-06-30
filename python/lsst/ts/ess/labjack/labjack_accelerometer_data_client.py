@@ -27,7 +27,7 @@ import math
 import types
 from typing import Any
 
-# Hide my error `Module "labjack" has no attribute "ljm"`
+# Hide mypy error `Module "labjack" has no attribute "ljm"`.
 from labjack import ljm  # type: ignore
 import numpy as np
 import yaml
@@ -36,13 +36,13 @@ from lsst.ts import salobj
 from lsst.ts import utils
 from .base_labjack_data_client import BaseLabJackDataClient
 
-# Time limit for communicating with the LabJack (seconds)
+# Time limit for communicating with the LabJack (seconds).
 COMMUNICATION_TIMEOUT = 5
 
-# Maximum sampling frequency (Hz) that the simulator allows
+# Maximum sampling frequency (Hz) that the simulator allows.
 MAX_MOCK_SAMPLE_FREQUENCY = 1000
 
-# Smallest allowed max_frequency / config.min_frequency
+# Smallest allowed max_frequency / config.min_frequency.
 MIN_FREQUENCY_RATIO = 2
 
 
@@ -84,7 +84,7 @@ class LabJackAccelerometerDataClient(BaseLabJackDataClient):
         self.topic = topics.tel_accelerometerPSD
         self.array_len = len(self.topic.DataType().accelerationPSDX)
 
-        # Read three channels; X, Y, Z
+        # Read three channels; X, Y, Z.
         self.num_channels = 3  # x, y, z
 
         if config.min_frequency * MIN_FREQUENCY_RATIO > config.max_frequency:
@@ -94,12 +94,12 @@ class LabJackAccelerometerDataClient(BaseLabJackDataClient):
                 f"= {config.max_frequency / MIN_FREQUENCY_RATIO}"
             )
 
-        # Interval between samples (seconds);
+        # Interval between samples (seconds).
         # Set by _blocking_start_data_stream
         # since the LabJack may offer a smaller value than requested.
         self.sampling_interval: None | float = None
 
-        # Number of samples (per channel) to measure PSD
+        # Number of samples (per channel) to measure PSD.
         num_frequencies_from_0 = round(
             config.num_frequencies
             * config.max_frequency
@@ -137,9 +137,9 @@ class LabJackAccelerometerDataClient(BaseLabJackDataClient):
         # you set self.mock_raw_1d_data.
         self.make_random_mock_raw_1d_data = True
         # Unit tests may set this to a list of floats
-        # with length self.num_samples containing:
+        # with length 3 * self.num_samples containing:
         # [v0_chan0, v0_chan1, v0_chan2, v1_chan0, v1_chan1, v1_chan2,
-        # ..., vn_chan0, vn_chan1, vn_chan2]
+        # ..., vn_chan0, vn_chan1, vn_chan2].
         # In simulation mode this will be used used to compute the PSDs.
         # If None and if make_random_mock_raw_1d_data is true
         # then it will be set to random data when first needed.
@@ -270,7 +270,7 @@ additionalProperties: false
             sleep_interval = self.sampling_interval * self.num_samples
             if self.mock_raw_1d_data is None and self.make_random_mock_raw_1d_data:
                 # Generate random mock data
-                # using half the available scale of -10 to 10 volts
+                # using half the available scale of -10 to 10 volts.
                 self.mock_raw_1d_data = list(
                     np.random.random(self.num_samples * self.num_channels) * 10 - 5
                 )
@@ -295,7 +295,7 @@ additionalProperties: false
         desired_sampling_frequency = 2 * self.config.max_frequency
 
         # LabJack ljm demo mode does not support streaming,
-        # so use mock streaming
+        # so use mock streaming.
         if self.simulation_mode == 0:
             actual_sampling_frequency = ljm.eStreamStart(
                 self.handle,
@@ -309,7 +309,7 @@ additionalProperties: false
             )
             # Warn if the LabJack cannot gather data as quickly as requested.
             # Allow a bit of margin for roundoff error (the log statement
-            # above may help determine a good value for this margin)
+            # above may help determine a good value for this margin).
             if actual_sampling_frequency < desired_sampling_frequency * 0.99:
                 actual_max_frequency = actual_sampling_frequency / 2
                 self.log.warning(
@@ -331,7 +331,7 @@ additionalProperties: false
             self.sampling_interval = 1 / actual_sampling_frequency
             self.loop.call_soon_threadsafe(self.start_mock_stream)
 
-        # Compute self.psd_frequencies and self.psd_start_index
+        # Compute self.psd_frequencies and self.psd_start_index.
         self.psd_frequencies = np.fft.rfftfreq(self.num_samples, self.sampling_interval)
         assert self.psd_frequencies is not None  # make mypy happy
 
@@ -354,7 +354,7 @@ additionalProperties: false
         Call in a thread to avoid blocking the event loop.
         """
         # LabJack ljm demo mode does not support streaming,
-        # but this call seems to work anyway
+        # but this call seems to work anyway.
         ljm.eStreamStop(self.handle)
 
     def blocking_data_stream_callback(self, handle: int) -> None:
@@ -452,7 +452,7 @@ additionalProperties: false
         """
         super()._blocking_connect()
 
-        # Read each input channel, to make sure the configuration is valid
+        # Read each input channel, to make sure the configuration is valid.
         input_channels = [f"AIN{i}" for i in self.config.analog_inputs]
         num_frames = len(input_channels)
         values = ljm.eReadNames(self.handle, num_frames, input_channels)
