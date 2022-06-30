@@ -19,10 +19,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ["MockEssArrayTopic"]
+__all__ = ["MockEssArrayTopic", "MockESSAccelerometerPSDTopic"]
 
 import dataclasses
-from typing import Any, Dict, List, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 
 class MockEssArrayTopic:
@@ -39,7 +40,7 @@ class MockEssArrayTopic:
 
     Attributes
     ----------
-    data_dict : `Dict` [`str`, dataclass]
+    data_dict : `dict` [`str`, dataclass]
         The data most recently written by `set_put`
         as a dict of sensor_name: data.
     """
@@ -51,7 +52,7 @@ class MockEssArrayTopic:
         self.field_name = field_name
         self.field_len = field_len
 
-        def get_zeros() -> List[float]:
+        def get_zeros() -> list[float]:
             """Get a list of field_len zeros.
 
             Needed in order to make the default for the array field
@@ -74,7 +75,7 @@ class MockEssArrayTopic:
                 ("location", str, dataclasses.field(default="")),  # type: ignore
             ],
         )
-        self.data_dict: Dict[str, Any] = dict()
+        self.data_dict: dict[str, Any] = dict()
 
     async def set_write(
         self,
@@ -118,3 +119,92 @@ class MockEssArrayTopic:
             location=location,
             **kwargs,
         )
+
+
+class MockESSAccelerometerPSDTopic:
+    """Mock ESS accelerometerPSD topic.
+
+    Attributes
+    ----------
+    data : `dataclasses.dataclass`
+        The data most recently written by `set`
+    """
+
+    def __init__(self) -> None:
+        self.attr_name = "tel_accelerometerPSD"
+
+        def get_zeros() -> list[float]:
+            """Get a list of 200 zeros.
+
+            Needed in order to make the default for the array field
+            a mutable type (a tuple isn't good enough because some
+            code really cares that it is a list).
+            """
+            return [0] * 200
+
+        self.DataType = dataclasses.make_dataclass(
+            cls_name="DataType",
+            fields=[
+                ("sensorName", str, dataclasses.field(default="")),  # type: ignore
+                ("timestamp", float, dataclasses.field(default=0)),  # type: ignore
+                ("interval", float, dataclasses.field(default=0)),  # type: ignore
+                ("minPSDFrequency", float, dataclasses.field(default=0)),  # type: ignore
+                ("maxPSDFrequency", float, dataclasses.field(default=0)),  # type: ignore
+                ("numDataPoints", int, dataclasses.field(default=0)),  # type: ignore
+                (
+                    "accelerationPSDX",
+                    list[float],
+                    dataclasses.field(default_factory=get_zeros),  # type: ignore
+                ),
+                (
+                    "accelerationPSDY",
+                    list[float],
+                    dataclasses.field(default_factory=get_zeros),  # type: ignore
+                ),
+                (
+                    "accelerationPSDZ",
+                    list[float],
+                    dataclasses.field(default_factory=get_zeros),  # type: ignore
+                ),
+                ("location", str, dataclasses.field(default="")),  # type: ignore
+            ],
+        )
+        self.data = self.DataType()
+
+    def set(self, **kwargs: Any) -> None:
+        """Set self.data_dict[sensorName] = data.
+
+        where data is a dataclass that mimics the SAL topic data type,
+        but without the private fields or the ESSID field.
+        The data also has no get_vars method.
+
+        Parameters
+        ----------
+        sensorName : `str`
+            Sensor name.
+        timestamp : `float`
+            Time at which data was measured, as TAI unix.
+        numChannels : `int`
+            The number of valid channels.
+            Must be >= 0 and < field_len.
+        """
+        for axis in ("X", "Y", "Z"):
+            field_name = f"accelerationPSD{axis}"
+            array_data = kwargs.pop(field_name, None)
+            if array_data is None:
+                continue
+
+            array_len = len(array_data)
+            if len(array_data) > 200:
+                raise ValueError(
+                    f"{field_name}={array_data} must have no more than 200 elements"
+                )
+            old_data = getattr(self.data, field_name)
+            full_data = list(array_data[0:array_len]) + list(old_data[array_len:200])
+            setattr(self.data, field_name, full_data)
+
+        for field_name, value in kwargs.items():
+            setattr(self.data, field_name, value)
+
+    async def set_write(self, **kwargs: Any) -> None:
+        self.set(**kwargs)

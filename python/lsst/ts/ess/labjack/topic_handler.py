@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 # This file is part of ts_ess_labjack.
 #
 # Developed for the Vera C. Rubin Observatory Telescope and Site Systems.
@@ -24,12 +22,10 @@ from __future__ import annotations
 __all__ = ["TopicHandler"]
 
 import math
-from typing import Dict, Sequence, TYPE_CHECKING
+from collections.abc import Sequence
 
+from lsst.ts import salobj
 from lsst.ts import utils
-
-if TYPE_CHECKING:
-    from lsst.ts import salobj
 
 
 class TopicHandler:
@@ -122,7 +118,7 @@ class TopicHandler:
         if not isinstance(field_data, list):
             raise ValueError(f"Field {topic.attr_name}.{field_name} is not array")
         self.array_len = len(field_data)
-        # Dict of array index: LabJack channel name
+        # dict of array index: LabJack channel name.
         self.channel_dict = {i: name for i, name in enumerate(channel_names) if name}
         bad_indices = [i for i in self.channel_dict if i >= self.array_len]
         if bad_indices:
@@ -132,13 +128,13 @@ class TopicHandler:
             )
         self.num_channels = max(i for i in self.channel_dict) + 1
 
-    async def put_data(self, data_dict: Dict[str, float]) -> None:
+    async def put_data(self, data_dict: dict[str, float]) -> None:
         """Write data to the topic.
 
         Parameters
         ----------
-        data_dict : `Dict` [`str`, `float`]
-            Dict of LabJack channel name: raw value.
+        data_dict : `dict` [`str`, `float`]
+            dict of LabJack channel name: raw value.
             This may include more channels than this topic needs.
         """
         data_arr = [math.nan] * self.array_len

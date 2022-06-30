@@ -4,5 +4,5 @@ topics:
     sensor_name: labjack_test_1
     field_name: temperature
     location: none, here
-    # Channel names must all be strings
+    # Channel names must all be strings.
     channel_names: ["AIN0", 1]

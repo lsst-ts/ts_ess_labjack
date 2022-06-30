@@ -1,4 +1,4 @@
-# This file is part of ts_ess_common.
+# This file is part of ts_ess_labjack.
 #
 # Developed for the Vera C. Rubin Observatory Telescope and Site Systems.
 # This product includes software developed by the LSST Project
@@ -25,7 +25,7 @@ import math
 import pathlib
 import unittest
 import types
-from typing import Any, Set, Union
+from typing import Any, TypeAlias
 
 import yaml
 
@@ -37,20 +37,19 @@ logging.basicConfig(
     format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG
 )
 
-PathT = Union[str, pathlib.Path]
+PathT: TypeAlias = str | pathlib.Path
 
+# Standard timeout in seconds
 TIMEOUT = 5
-"""Standard timeout in seconds."""
 
 
 class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         self.log = logging.getLogger()
-        self.data_dir = pathlib.Path(__file__).parent / "data"
+        self.data_dir = (
+            pathlib.Path(__file__).parent / "data" / "config" / "data_client"
+        )
 
-        # Normally the CSC does validation, but we need to do it here
-        # in order to expand defaults (and to reduce the risk of feeding
-        # in an invalid config).
         config_schema = labjack.LabJackDataClient.get_config_schema()
         self.validator = salobj.DefaultingValidator(config_schema)
 
@@ -68,10 +67,9 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
         topics_kwargs = {topic.attr_name: topic for topic in mock_topics}
         self.topics = types.SimpleNamespace(**topics_kwargs)
 
-    def test_constructor_good_full(self) -> None:
-        """Construct with tests/data/good_full.yaml
+    async def test_constructor_good_full(self) -> None:
+        """Construct with good_full.yaml and compare values to that file.
 
-        and compare values to that file.
         Use the default simulation_mode.
         """
         config = self.get_config("good_full.yaml")
@@ -112,10 +110,9 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
         assert topic_handlers[2].num_channels == 2
         assert topic_handlers[2].channel_dict == {1: "AIN6"}
 
-    def test_constructor_good_minimal(self) -> None:
-        """Construct with tests/data/good_minimal.yaml
+    async def test_constructor_good_minimal(self) -> None:
+        """Construct with good_minimal.yaml and compare values to that file.
 
-        and compare values to that file.
         Use the default simulation_mode.
         """
         config = self.get_config("good_minimal.yaml")
@@ -138,7 +135,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
         assert topic_handlers[0].num_channels == 2
         assert topic_handlers[0].channel_dict == {1: "AIN2"}
 
-    def test_constructor_specify_simulation_mode(self) -> None:
+    async def test_constructor_specify_simulation_mode(self) -> None:
         config = self.get_config("good_minimal.yaml")
         for simulation_mode in (0, 1):
             data_client = labjack.LabJackDataClient(
@@ -211,7 +208,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
         sensor_name: str,
         field_name: str,
         location: str,
-        good_indices: Set[int],
+        good_indices: set[int],
         expected_len: int,
     ) -> None:
         """Check topic data.
@@ -229,7 +226,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
             Location string.
         field_name: str
             Name of array-valued field.
-        good_indices : `Set` [`int`]
+        good_indices : `set` [`int`]
             Indices of values expected to be finite.
         expected_len : `int`
             Expected length of the array.
