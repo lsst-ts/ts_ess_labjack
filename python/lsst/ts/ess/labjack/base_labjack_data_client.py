@@ -29,14 +29,14 @@ import types
 from collections.abc import Callable
 from typing import Any
 
-# Hide mypy error `Module "labjack" has no attribute "ljm"`
+# Hide mypy error `Module "labjack" has no attribute "ljm"`.
 from labjack import ljm  # type: ignore
 
 from lsst.ts.ess import common
 
 from lsst.ts import salobj
 
-# Time limit for connecting to the LabJack (seconds)
+# Time limit for connecting to the LabJack (seconds).
 CONNECT_TIMEOUT = 5
 
 # LabJack's special identifier to run in simulation mode.
@@ -73,7 +73,7 @@ class BaseLabJackDataClient(common.BaseDataClient):
         log: logging.Logger,
         simulation_mode: int = 0,
     ) -> None:
-        # handle to LabJack device
+        # handle to LabJack device.
         self.handle = None
 
         # The thread pool executor used by `run_in_thread`.
@@ -154,7 +154,7 @@ class BaseLabJackDataClient(common.BaseDataClient):
         if self.simulation_mode == 0:
             identifier = self.config.identifier
             if self.config.connection_type in {"TCP", "WIFI"}:
-                # Resolve domain name, since ljm does not do this
+                # Resolve domain name, since ljm does not do this.
                 identifier = socket.gethostbyname(identifier)
                 self.log.info(f"resolved identifier={identifier!r}")
         else:

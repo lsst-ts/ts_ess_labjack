@@ -1,0 +1,9 @@
+identifier: test.foo.bar
+max_frequency: 1000
+write_acceleration: false
+accelerometers:
+  - sensor_name: chaos
+    location: auxtel
+    analog_inputs: [6, 3, 1]
+    offsets: [0, 0.1, -0.2]
+    scales: [1, 1.1, 1.2]

@@ -1,13 +1,16 @@
 device_type: T4
 connection_type: USB
 identifier: test.foo.bar
-sensor_name: alt_accel
-location: somewhere
 # These min_frequency, max_frequency, and num_frequencies values are assumed
 # in test_acceleration_data_client.py, and they produce nice round PSD frequencies,
 # which makes the data easier to understand.
 min_frequency: 20
 max_frequency: 500
 num_frequencies: 97
-analog_inputs: [0, 2, 5]
-scale: 10
+write_acceleration: false
+accelerometers:
+  - sensor_name: alpha
+    location: somewhere
+    analog_inputs: [0, 2, 5]
+    offsets: [0, -0.1, 1]
+    scales: [1, 0.1, 2]
