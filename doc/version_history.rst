@@ -6,6 +6,26 @@
 Version History
 ###############
 
+v0.6.0
+------
+
+* Improve `LabJackAccelerometerDataClient`:
+
+    * Support multiple accelerometers.
+    * Support per-channel offset and scale.
+    * Optionally write "raw" acceleration data (in addition to the acceleration PSDs).
+
+* `LabJackDataClient`: change definition of offset parameter to match `LabJackAccelerometerDataClient`.
+  Now published data = (raw data - offset) * scale.
+  This change will not affect existing use of this data client (as configured in ts_config_ocs), because that has offset=0.
+  
+* Improve mock ESS topics:
+
+    * Add `BaseMockEssTopic`, and refactor the other topics to use it.
+    * Add `MockESSAccelerometerTopic`
+
+* conda/meta.yaml: update to support multiple versions of Python.
+
 v0.5.0
 ------
 
