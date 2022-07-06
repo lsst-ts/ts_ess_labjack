@@ -56,18 +56,22 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
         config_schema = labjack.LabJackAccelerometerDataClient.get_config_schema()
         self.validator = salobj.DefaultingValidator(config_schema)
 
-        # Mock topics listed in the config files in tests/data.
-        # These happen to match real array-valued ESS telemetry topics,
-        # though that doesn't matter for these tests.
-        self.topic = labjack.MockESSAccelerometerPSDTopic()
-        self.topics = types.SimpleNamespace(**{self.topic.attr_name: self.topic})
+        self.psd_topic = labjack.MockESSAccelerometerPSDTopic()
+        self.raw_topic = labjack.MockESSAccelerometerTopic()
+        self.topics = types.SimpleNamespace(
+            **{
+                self.psd_topic.attr_name: self.psd_topic,
+                self.raw_topic.attr_name: self.raw_topic,
+            }
+        )
 
     async def test_constructor_good_full(self) -> None:
-        """Construct with good_full.yaml and compare values to that file.
+        """Construct with good_full_two_accelerometers.yaml
+        and compare values to that file.
 
         Use the default simulation_mode.
         """
-        config = self.get_config("good_full.yaml")
+        config = self.get_config("good_full_two_accelerometers.yaml")
         data_client = labjack.LabJackAccelerometerDataClient(
             config=config,
             topics=self.topics,
@@ -75,15 +79,17 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
         )
         assert data_client.simulation_mode == 0
         assert isinstance(data_client.log, logging.Logger)
-        assert data_client.config.analog_inputs == [0, 2, 5]
-        assert data_client.modbus_addresses == [0, 4, 10]
+        assert len(data_client.config.accelerometers) == 2
+        assert data_client.accelerometers[0].analog_inputs == [0, 2, 5]
+        assert data_client.accelerometers[1].analog_inputs == [6, 1, 3]
+        assert data_client.modbus_addresses == [0, 4, 10, 12, 2, 6]
 
     async def test_constructor_good_minimal(self) -> None:
         """Construct with good_minimal.yaml and compare values to that file.
 
         Use the default simulation_mode.
         """
-        config = self.get_config("good_minimal.yaml")
+        config = self.get_config("good_minimal_one_accelerometer.yaml")
         data_client = labjack.LabJackAccelerometerDataClient(
             config=config,
             topics=self.topics,
@@ -91,11 +97,12 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
         )
         assert data_client.simulation_mode == 0
         assert isinstance(data_client.log, logging.Logger)
-        assert data_client.config.analog_inputs == [6, 3, 1]
+        assert len(data_client.config.accelerometers) == 1
+        assert data_client.accelerometers[0].analog_inputs == [6, 3, 1]
         assert data_client.modbus_addresses == [12, 6, 2]
 
     async def test_constructor_specify_simulation_mode(self) -> None:
-        config = self.get_config("good_minimal.yaml")
+        config = self.get_config("good_minimal_one_accelerometer.yaml")
         for simulation_mode in (0, 1):
             data_client = labjack.LabJackAccelerometerDataClient(
                 config=config,
@@ -110,7 +117,7 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
 
         Since the PSDs are random, don't try to check the PSD data.
         """
-        config = self.get_config("good_full.yaml")
+        config = self.get_config("good_full_two_accelerometers.yaml")
         data_client = labjack.LabJackAccelerometerDataClient(
             config=config, topics=self.topics, log=self.log, simulation_mode=1
         )
@@ -121,17 +128,52 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
         assert data_client.handle is not None
         assert not data_client.run_task.done()
 
-        # Wait for data to be written, then check it for plausibility
-        # (we do not know what values will be written).
+        # Wait for data to be written, then check the raw values
+        # (the raw data is random noise, so don't bother to check the
+        # the computed PSD data; see test_power_spectral_density for that).
         data_client.wrote_event.clear()
         await asyncio.wait_for(data_client.wrote_event.wait(), timeout=TIMEOUT)
 
-        data = data_client.topic.data
-        assert data.sensorName == "alt_accel"
-        assert data.numDataPoints == data_client.config.num_frequencies
-        assert data.minPSDFrequency == pytest.approx(data_client.config.min_frequency)
-        assert data.maxPSDFrequency == pytest.approx(data_client.config.max_frequency)
-        assert len(data.accelerationPSDX) == 200
+        assert set(data_client.psd_topic.data_dict.keys()) == {"alpha", "beta"}
+        for data in data_client.psd_topic.data_dict.values():
+            assert data.numDataPoints == data_client.config.num_frequencies
+            assert (
+                data_client.psd_frequencies[-data_client.config.num_frequencies - 1]
+                <= data_client.config.min_frequency
+                <= data_client.psd_frequencies[-data_client.config.num_frequencies]
+            )
+            assert data.maxPSDFrequency == pytest.approx(
+                data_client.config.max_frequency
+            )
+            assert len(data.accelerationPSDX) == 200
+
+        # Wait for data to be written, then check the raw data.
+        # With the configured values there are 4
+        # Only the last batch of values is saved by the mock topic.
+        assert data_client.accel_array_len == 200
+        assert data_client.num_samples == 394
+        start_accel_index = 200
+        num_accel_values = 194
+        scaled_data = data_client.scaled_data_from_raw(data_client.mock_raw_1d_data)
+        scaled_row_index = 0
+        for sensor_name, accel_data in data_client.accel_topic.data_dict.items():
+            assert accel_data.sensorName == sensor_name
+            assert accel_data.numDataPoints == num_accel_values
+            assert len(accel_data.accelerationX) == 200
+            for axis in ("X", "Y", "Z"):
+                field_name = f"acceleration{axis}"
+                accel_array = getattr(accel_data, field_name)
+                assert np.allclose(
+                    scaled_data[
+                        scaled_row_index,
+                        start_accel_index : start_accel_index + num_accel_values,
+                    ],
+                    accel_array[0:num_accel_values],
+                )
+                scaled_row_index += 1
+
+        data_client.wrote_event.clear()
+        await asyncio.wait_for(data_client.wrote_event.wait(), timeout=TIMEOUT)
 
         await data_client.stop()
         assert data_client.handle is None
@@ -139,7 +181,7 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def test_power_spectral_density(self) -> None:
         """Test operation with expected PSDs."""
-        config = self.get_config("good_full.yaml")
+        config = self.get_config("good_full_one_accelerometer.yaml")
         data_client = labjack.LabJackAccelerometerDataClient(
             config=config, topics=self.topics, log=self.log, simulation_mode=1
         )
@@ -159,9 +201,9 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
             assert False, "Timed out waiting for sampling_interval to be set"
 
         # These values are all based on the exact configuration
-        # in good_full.yaml, which were chosen to give rounded values
-        # for PSD frequencies and an exact match between one of those.
-        # frequencies and config.min_frequency.
+        # in good_full_one_accelerometer.yaml, which were chosen to give
+        # rounded values for PSD frequencies and an exact match
+        # between one of those frequencies and config.min_frequency.
         assert data_client.psd_start_index == 4
         assert data_client.num_samples == 200
         assert np.allclose(
@@ -174,8 +216,10 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
         # make each frequency match one of the frequencies.
         # of the reported PSD and make them all the same amplitude.
         axis_frequencies: dict[str, list[float]] = dict()
-        assert data_client.config.min_frequency == pytest.approx(
-            data_client.psd_frequencies[4]
+        assert (
+            data_client.psd_frequencies[-data_client.config.num_frequencies - 1]
+            <= data_client.config.min_frequency
+            <= data_client.psd_frequencies[-data_client.config.num_frequencies]
         )
         assert data_client.config.max_frequency == pytest.approx(
             data_client.psd_frequencies[-1]
@@ -186,8 +230,8 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
         # where each index is relative to the full frequency array
         # (rather than the subset published).
         frequency_indices = dict(
-            X=[4, 10, 60],
-            Y=[5, 17],
+            X=[8, 12, 60],
+            Y=[9, 17],
             Z=[40],
         )
         for axis, indices in frequency_indices.items():
@@ -222,22 +266,29 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
         data_client.wrote_event.clear()
         await asyncio.wait_for(data_client.wrote_event.wait(), timeout=TIMEOUT)
 
-        data = data_client.topic.data
-        assert data.sensorName == "alt_accel"
-        assert data.numDataPoints == data_client.config.num_frequencies
-        assert data.minPSDFrequency == pytest.approx(data_client.config.min_frequency)
-        assert data.maxPSDFrequency == pytest.approx(data_client.config.max_frequency)
-        assert len(data.accelerationPSDX) == 200
-        for axis, indices in frequency_indices.items():
+        assert not data_client.config.write_acceleration
+        assert data_client.accel_topic.data_dict == {}
+
+        psd_data = data_client.psd_topic.data
+        assert psd_data.sensorName == "alpha"
+        assert psd_data.numDataPoints == data_client.config.num_frequencies
+        assert psd_data.minPSDFrequency == pytest.approx(
+            data_client.config.min_frequency
+        )
+        assert psd_data.maxPSDFrequency == pytest.approx(
+            data_client.config.max_frequency
+        )
+        assert len(psd_data.accelerationPSDX) == 200
+        for axis_index, (axis, indices) in enumerate(frequency_indices.items()):
+            scale = data_client.accelerometers[0].scales[axis_index]
             field_name = f"accelerationPSD{axis}"
-            psd = getattr(data, field_name)
-            assert np.all(np.isnan(psd[data.numDataPoints :]))
-            ideal_psd = np.zeros(data.numDataPoints)
+            psd = getattr(psd_data, field_name)
+            assert np.all(np.isnan(psd[psd_data.numDataPoints :]))
+            ideal_psd = np.zeros(psd_data.numDataPoints)
             for index in indices:
-                # The value 1e6 is based on observation (rather than
-                # a prediction based on math).
-                ideal_psd[index - data_client.psd_start_index] = 1e6
-            assert np.allclose(psd[0 : data.numDataPoints], ideal_psd)
+                # The value 1e4 is based on observation.
+                ideal_psd[index - data_client.psd_start_index] = 1e4 * scale**2
+            assert np.allclose(psd[0 : psd_data.numDataPoints], ideal_psd)
 
         await data_client.stop()
         assert data_client.handle is None
@@ -267,6 +318,6 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
             The config dict.
         """
         with open(self.data_dir / filename, "r") as f:
-            raw_config_dict = yaml.safe_load(f.read())
-        config_dict = self.validator.validate(raw_config_dict)
+            config_dict = yaml.safe_load(f.read())
+        config_dict = self.validator.validate(config_dict)
         return types.SimpleNamespace(**config_dict)

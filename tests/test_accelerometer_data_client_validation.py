@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import copy
 import itertools
 import logging
 import pathlib
@@ -54,74 +55,126 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
         self.config_schema = labjack.LabJackAccelerometerDataClient.get_config_schema()
         self.validator = salobj.DefaultingValidator(self.config_schema)
 
-    async def test_good_full(self) -> None:
-        config = self.get_and_validate_config("good_full.yaml")
+    async def test_good_full_two_accelerometers(self) -> None:
+        config = self.get_and_validate_config("good_full_two_accelerometers.yaml")
 
         # Check against the values in file good_full.yaml.
         assert config.device_type == "T4"
         assert config.connection_type == "USB"
-        assert config.sensor_name == "alt_accel"
-        assert config.location == "somewhere"
         assert config.min_frequency == 20
         assert config.max_frequency == 500
-        assert config.num_frequencies == 97
-        assert config.analog_inputs == [0, 2, 5]
-        assert config.scale == 10
+        assert config.num_frequencies == 190
+        assert config.write_acceleration
+        assert config.accelerometers == [
+            dict(
+                sensor_name="alpha",
+                location="upstairs",
+                analog_inputs=[0, 2, 5],
+                offsets=[0, -0.1, 1],
+                scales=[1, 0.1, 2],
+            ),
+            dict(
+                sensor_name="beta",
+                location="downstairs",
+                analog_inputs=[6, 1, 3],
+                offsets=[0.1, 0.2, 0.3],
+                scales=[0.4, 0.5, 0.6],
+            ),
+        ]
 
-    async def test_good_minimal(self) -> None:
-        config = self.get_and_validate_config("good_minimal.yaml")
+    async def test_good_minimal_one_accelerometer(self) -> None:
+        config = self.get_and_validate_config("good_minimal_one_accelerometer.yaml")
 
         # Check against the values in file good_minimal.yaml.
         assert config.device_type == "T7"
         assert config.connection_type == "TCP"
-        assert config.sensor_name == "accel"
-        assert config.location == "auxtel"
         assert config.min_frequency == 0
         assert config.max_frequency == 1000
         assert config.num_frequencies == 200
-        assert config.analog_inputs == [6, 3, 1]
-        assert config.scale == 1
+        assert not config.write_acceleration
+        assert config.accelerometers == [
+            dict(
+                sensor_name="chaos",
+                location="auxtel",
+                analog_inputs=[6, 3, 1],
+                offsets=[0, 0.1, -0.2],
+                scales=[1, 1.1, 1.2],
+            ),
+        ]
 
-    async def test_missing_field(self) -> None:
-        config = self.get_and_validate_config("good_minimal.yaml")
-        fields_with_defaults = {
-            "device_type",
-            "connection_type",
-            "min_frequency",
-            "num_frequencies",
-        }
+    async def test_wrong_fields(self) -> None:
+        # Test missing a required field (that has no default).
+        config = self.get_and_validate_config("good_minimal_one_accelerometer.yaml")
         good_config_dict = vars(config)
-        for missing_field in good_config_dict:
-            if missing_field in fields_with_defaults:
-                continue
+        for field_with_no_default in ("identifier", "max_frequency", "accelerometers"):
             bad_config_dict = good_config_dict.copy()
-            del bad_config_dict[missing_field]
+            del bad_config_dict[field_with_no_default]
             with pytest.raises(jsonschema.ValidationError):
                 self.validator.validate(bad_config_dict)
 
+        # Test adding a field
+        good_config_dict = vars(config)
+        bad_config_dict = good_config_dict.copy()
+        bad_config_dict["no_such_field"] = 0
+        with pytest.raises(jsonschema.ValidationError):
+            self.validator.validate(bad_config_dict)
+
+    async def test_wrong_accelerometer_fields(self) -> None:
+        # Test missing a required field (that has no default).
+        config = self.get_and_validate_config("good_minimal_one_accelerometer.yaml")
+        good_config_dict = vars(config)
+        for field in config.accelerometers[0]:
+            bad_config_dict = copy.deepcopy(good_config_dict)
+            del bad_config_dict["accelerometers"][0][field]
+            with pytest.raises(jsonschema.ValidationError):
+                self.validator.validate(bad_config_dict)
+
+        # Test adding a field
+        good_config_dict = vars(config)
+        bad_config_dict = good_config_dict.copy()
+        bad_config_dict["accelerometers"][0]["no_such_field"] = 0
+        with pytest.raises(jsonschema.ValidationError):
+            self.validator.validate(bad_config_dict)
+
     async def test_bad_analog_inputs(self) -> None:
-        config = self.get_and_validate_config("good_minimal.yaml")
+        config = self.get_and_validate_config("good_minimal_one_accelerometer.yaml")
         good_config_dict = vars(config)
 
         # Test the wrong number of analog inputs.
         # Pick a subset of inputs from a list of arbitrary valid inputs.
         arbitrary_valid_inputs = [2, 1, 0, 3, 5, 8, 9, 21]
-        for bad_num_analog_inputs in range(7):
-            if bad_num_analog_inputs == 3:
+        for bad_num_values in range(7):
+            if bad_num_values == 3:
                 continue
-            bad_analog_inputs = arbitrary_valid_inputs[0:bad_num_analog_inputs]
-            bad_config_dict = good_config_dict.copy()
-            bad_config_dict["analog_inputs"] = bad_analog_inputs
+            bad_analog_inputs = arbitrary_valid_inputs[0:bad_num_values]
+            bad_config_dict = copy.deepcopy(good_config_dict)
+            bad_config_dict["accelerometers"][0]["analog_inputs"] = bad_analog_inputs
             with pytest.raises(jsonschema.ValidationError):
                 self.validator.validate(bad_config_dict)
 
         # Test negative analog inputs.
         for bad_value, index in itertools.product((-1, -2, -10), (0, 1, 2)):
             bad_config_dict = good_config_dict.copy()
-            bad_config_dict["analog_inputs"][index] = bad_value
-            print("bad_config_dict=", bad_config_dict)
+            bad_config_dict["accelerometers"][0]["analog_inputs"][index] = bad_value
             with pytest.raises(jsonschema.ValidationError):
                 self.validator.validate(bad_config_dict)
+
+    async def test_bad_offsets_or_scales(self) -> None:
+        config = self.get_and_validate_config("good_minimal_one_accelerometer.yaml")
+        good_config_dict = vars(config)
+
+        # Test the wrong number of analog inputs.
+        # Pick a subset of inputs from a list of arbitrary valid inputs.
+        arbitrary_valid_inputs = [2, 1, 0, 3, 5, 8, 9, 21]
+        for field in ("offsets", "scales"):
+            for bad_num_values in range(7):
+                if bad_num_values == 3:
+                    continue
+                bad_values = arbitrary_valid_inputs[0:bad_num_values]
+                bad_config_dict = copy.deepcopy(good_config_dict)
+                bad_config_dict["accelerometers"][0][field] = bad_values
+                with pytest.raises(jsonschema.ValidationError):
+                    self.validator.validate(bad_config_dict)
 
     def get_and_validate_config(self, filename: PathT) -> types.SimpleNamespace:
         raw_config_dict = self.get_config_dict(filename)

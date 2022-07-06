@@ -1,6 +1,0 @@
-identifier: test.foo.bar
-sensor_name: accel
-location: auxtel
-max_frequency: 1000
-analog_inputs: [6, 3, 1]
-scale: 1

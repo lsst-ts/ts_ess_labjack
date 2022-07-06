@@ -19,72 +19,67 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ["MockEssArrayTopic", "MockESSAccelerometerPSDTopic"]
+__all__ = [
+    "MockEssArrayTopic",
+    "MockESSAccelerometerPSDTopic",
+    "MockESSAccelerometerTopic",
+]
 
 import dataclasses
 from collections.abc import Sequence
-from typing import Any
+import copy
+from typing import Any, Type
 
 
-class MockEssArrayTopic:
-    """Mock array-valued ESS telemetry topic.
+class GetListOfZeros:
+    """Functor to return a list of zeros of a specified length.
+
+    Intended as a default_factory for array-valued fields in a dataclass.
+    """
+
+    def __init__(self, field_len: int) -> None:
+        self.field_len = field_len
+
+    def __call__(self) -> list[float]:
+        return [0] * self.field_len
+
+
+class BaseMockEssTopic:
+    """Base class for mock ESS telemetry topics.
 
     Parameters
     ----------
     attr_name : `str`
         Topic attribute name, e.g. "tel_temperature".
-    field_name : `str`
-        The name of the array-valued field.
-    field_len : `int`
-        The length of the array-valued field.
+    DataType : `dataclasses.dataclass`
+        Topic data class.
 
     Attributes
     ----------
+    DataType : Type[`dataclasses.dataclass`]
+        Dataclass class (not instance) for topic data.
+    data : `dataclasses.dataclass`
+        The data most recently written by `set`
     data_dict : `dict` [`str`, dataclass]
-        The data most recently written by `set_put`
+        The data most recently written by `set_write`
         as a dict of sensor_name: data.
     """
 
-    def __init__(self, attr_name: str, field_name: str, field_len: int) -> None:
-        if field_len <= 0:
-            raise ValueError(f"field_len={field_len} must be positive.")
+    def __init__(self, attr_name: str, DataType: Type[Any]) -> None:
         self.attr_name = attr_name
-        self.field_name = field_name
-        self.field_len = field_len
-
-        def get_zeros() -> list[float]:
-            """Get a list of field_len zeros.
-
-            Needed in order to make the default for the array field
-            a mutable type (a tuple isn't good enough because some
-            code really cares that it is a list).
-            """
-            return [0] * field_len
-
-        self.DataType = dataclasses.make_dataclass(
-            cls_name="DataType",
-            fields=[
-                ("sensorName", str, dataclasses.field(default="0")),  # type: ignore
-                ("timestamp", float, dataclasses.field(default=0)),  # type: ignore
-                ("numChannels", int, dataclasses.field(default=0)),  # type: ignore
-                (
-                    field_name,
-                    Sequence[float],
-                    dataclasses.field(default_factory=get_zeros),  # type: ignore
-                ),
-                ("location", str, dataclasses.field(default="")),  # type: ignore
-            ],
-        )
+        self.DataType = DataType
+        self.data = DataType()
         self.data_dict: dict[str, Any] = dict()
 
-    async def set_write(
-        self,
-        sensorName: str,
-        timestamp: float,
-        numChannels: int,
-        location: str,
-        **kwargs: Sequence[float],
-    ) -> None:
+        # Dict of field_name: array length for array-valued fields.
+        self._array_field_lengths = {
+            field: len(value)
+            for field, value in vars(self.data).items()
+            if isinstance(value, list)
+        }
+        self._field_names = vars(self.data).keys()
+
+    def set(self, **kwargs: Any) -> Any:
         """Set self.data_dict[sensorName] = data.
 
         where data is a dataclass that mimics the SAL topic data type,
@@ -100,49 +95,102 @@ class MockEssArrayTopic:
         numChannels : `int`
             The number of valid channels.
             Must be >= 0 and < field_len.
+
+        Returns
+        -------
+        data : `dataclasses.dataclass`
+            A copy of the data written.
         """
-        if numChannels < 0 or numChannels >= self.field_len:
-            raise ValueError(f"numChannels={numChannels} <0 or >= {self.field_len}]")
-        array = kwargs.get(self.field_name, None)
-        if len(kwargs) != 1 or array is None:
+        invalid_keys = kwargs.keys() - self._field_names
+        if invalid_keys:
             raise ValueError(
-                f"kwargs={kwargs} must have exactly one item, with key {self.field_name}"
+                f"Unrecognized field names {sorted(invalid_keys)} in {kwargs}"
             )
-        if len(array) != self.field_len:
-            raise ValueError(
-                f"{self.field_name}={array} must have {self.field_len} elements"
-            )
-        self.data_dict[sensorName] = self.DataType(
-            sensorName=sensorName,
-            timestamp=timestamp,
-            numChannels=numChannels,
-            location=location,
-            **kwargs,
+
+        for field_name, new_value in kwargs.items():
+            field_len = self._array_field_lengths.get(field_name)
+            if field_len is not None:
+                old_value = getattr(self.data, field_name)
+                new_len = len(new_value)
+                nextra = field_len - new_len
+                if nextra < 0:
+                    raise ValueError(
+                        f"{field_name}={new_value} longer than {field_len} elements"
+                    )
+                new_value = list(new_value) + old_value[new_len:]
+            setattr(self.data, field_name, new_value)
+        return copy.copy(self.data)
+
+    async def set_write(self, **kwargs: Any) -> None:
+        new_data = self.set(**kwargs)
+        self.data_dict[self.data.sensorName] = new_data
+
+    async def write(self) -> None:
+        pass
+
+
+class MockEssArrayTopic(BaseMockEssTopic):
+    """Mock array-valued ESS telemetry topic.
+
+    Parameters
+    ----------
+    attr_name : `str`
+        Topic attribute name, e.g. "tel_temperature".
+    field_name : `str`
+        The name of the array-valued field.
+    field_len : `int`
+        The length of the array-valued field.
+
+    Attributes
+    ----------
+    data_dict : `dict` [`str`, dataclass]
+        The data most recently written by `set_write`
+        as a dict of sensor_name: data.
+    """
+
+    def __init__(self, attr_name: str, field_name: str, field_len: int) -> None:
+        if field_len <= 0:
+            raise ValueError(f"field_len={field_len} must be positive.")
+        self.field_name = field_name
+        self.field_len = field_len
+
+        get_zeros = GetListOfZeros(field_len)
+
+        DataType = dataclasses.make_dataclass(
+            cls_name="DataType",
+            fields=[
+                ("sensorName", str, dataclasses.field(default="0")),  # type: ignore
+                ("timestamp", float, dataclasses.field(default=0)),  # type: ignore
+                ("numChannels", int, dataclasses.field(default=0)),  # type: ignore
+                (
+                    self.field_name,
+                    Sequence[float],
+                    dataclasses.field(default_factory=get_zeros),  # type: ignore
+                ),
+                ("location", str, dataclasses.field(default="")),  # type: ignore
+            ],
         )
 
+        super().__init__(attr_name=attr_name, DataType=DataType)
 
-class MockESSAccelerometerPSDTopic:
+
+class MockESSAccelerometerPSDTopic(BaseMockEssTopic):
     """Mock ESS accelerometerPSD topic.
 
     Attributes
     ----------
     data : `dataclasses.dataclass`
         The data most recently written by `set`
+    data_dict : `dict` [`str`, dataclass]
+        The data most recently written by `set_write`
+        as a dict of sensor_name: data.
     """
 
     def __init__(self) -> None:
-        self.attr_name = "tel_accelerometerPSD"
 
-        def get_zeros() -> list[float]:
-            """Get a list of 200 zeros.
+        get_zeros = GetListOfZeros(field_len=200)
 
-            Needed in order to make the default for the array field
-            a mutable type (a tuple isn't good enough because some
-            code really cares that it is a list).
-            """
-            return [0] * 200
-
-        self.DataType = dataclasses.make_dataclass(
+        DataType = dataclasses.make_dataclass(
             cls_name="DataType",
             fields=[
                 ("sensorName", str, dataclasses.field(default="")),  # type: ignore
@@ -169,42 +217,50 @@ class MockESSAccelerometerPSDTopic:
                 ("location", str, dataclasses.field(default="")),  # type: ignore
             ],
         )
-        self.data = self.DataType()
 
-    def set(self, **kwargs: Any) -> None:
-        """Set self.data_dict[sensorName] = data.
+        super().__init__(attr_name="tel_accelerometerPSD", DataType=DataType)
 
-        where data is a dataclass that mimics the SAL topic data type,
-        but without the private fields or the ESSID field.
-        The data also has no get_vars method.
 
-        Parameters
-        ----------
-        sensorName : `str`
-            Sensor name.
-        timestamp : `float`
-            Time at which data was measured, as TAI unix.
-        numChannels : `int`
-            The number of valid channels.
-            Must be >= 0 and < field_len.
-        """
-        for axis in ("X", "Y", "Z"):
-            field_name = f"accelerationPSD{axis}"
-            array_data = kwargs.pop(field_name, None)
-            if array_data is None:
-                continue
+class MockESSAccelerometerTopic(BaseMockEssTopic):
+    """Mock ESS accelerometer topic.
 
-            array_len = len(array_data)
-            if len(array_data) > 200:
-                raise ValueError(
-                    f"{field_name}={array_data} must have no more than 200 elements"
-                )
-            old_data = getattr(self.data, field_name)
-            full_data = list(array_data[0:array_len]) + list(old_data[array_len:200])
-            setattr(self.data, field_name, full_data)
+    Attributes
+    ----------
+    data : `dataclasses.dataclass`
+        The data most recently written by `set`
+    data_dict : `dict` [`str`, dataclass]
+        The data most recently written by `set_write`
+        as a dict of sensor_name: data.
+    """
 
-        for field_name, value in kwargs.items():
-            setattr(self.data, field_name, value)
+    def __init__(self) -> None:
 
-    async def set_write(self, **kwargs: Any) -> None:
-        self.set(**kwargs)
+        get_zeros = GetListOfZeros(field_len=200)
+
+        DataType = dataclasses.make_dataclass(
+            cls_name="DataType",
+            fields=[
+                ("sensorName", str, dataclasses.field(default="")),  # type: ignore
+                ("timestamp", float, dataclasses.field(default=0)),  # type: ignore
+                ("interval", float, dataclasses.field(default=0)),  # type: ignore
+                ("numDataPoints", int, dataclasses.field(default=0)),  # type: ignore
+                (
+                    "accelerationX",
+                    list[float],
+                    dataclasses.field(default_factory=get_zeros),  # type: ignore
+                ),
+                (
+                    "accelerationY",
+                    list[float],
+                    dataclasses.field(default_factory=get_zeros),  # type: ignore
+                ),
+                (
+                    "accelerationZ",
+                    list[float],
+                    dataclasses.field(default_factory=get_zeros),  # type: ignore
+                ),
+                ("location", str, dataclasses.field(default="")),  # type: ignore
+            ],
+        )
+
+        super().__init__(attr_name="tel_accelerometer", DataType=DataType)

@@ -45,6 +45,10 @@ MAX_MOCK_SAMPLE_FREQUENCY = 1000
 # Smallest allowed max_frequency / config.min_frequency.
 MIN_FREQUENCY_RATIO = 2
 
+# Number of channels per accelerometer
+# We assume a 3-axis accelerometr: x, y, z
+NUM_CHANNELS_PER_ACCELEROMETER = 3
+
 
 class LabJackAccelerometerDataClient(BaseLabJackDataClient):
     """Read 3-axis accelerometer data from a LabJack T7 or similar,
@@ -81,11 +85,11 @@ class LabJackAccelerometerDataClient(BaseLabJackDataClient):
             config=config, topics=topics, log=log, simulation_mode=simulation_mode
         )
 
-        self.topic = topics.tel_accelerometerPSD
-        self.array_len = len(self.topic.DataType().accelerationPSDX)
+        self.psd_topic = topics.tel_accelerometerPSD
+        self.accel_topic = topics.tel_accelerometer
 
-        # Read three channels; X, Y, Z.
-        self.num_channels = 3  # x, y, z
+        self.psd_array_len = len(self.psd_topic.DataType().accelerationPSDX)
+        self.accel_array_len = len(self.accel_topic.DataType().accelerationX)
 
         if config.min_frequency * MIN_FREQUENCY_RATIO > config.max_frequency:
             raise ValueError(
@@ -93,6 +97,14 @@ class LabJackAccelerometerDataClient(BaseLabJackDataClient):
                 f"{config.max_frequency=} / {MIN_FREQUENCY_RATIO=} "
                 f"= {config.max_frequency / MIN_FREQUENCY_RATIO}"
             )
+
+        # List of accelerometer config as simple namespaces (structs);
+        # this is easier to work with self.config.accelerometers,
+        # which is a list of dicts.
+        self.accelerometers = [
+            types.SimpleNamespace(**accel_dict)
+            for accel_dict in self.config.accelerometers
+        ]
 
         # Interval between samples (seconds).
         # Set by _blocking_start_data_stream
@@ -115,17 +127,38 @@ class LabJackAccelerometerDataClient(BaseLabJackDataClient):
         # Set in _blocking_start_data_stream.
         self.psd_frequencies: None | np.ndarray = None
 
-        assert len(self.config.analog_inputs) == self.num_channels
-        self.topic.set(
-            sensorName=config.sensor_name,
-            location=config.location,
-            numDataPoints=0,
+        self.num_channels = NUM_CHANNELS_PER_ACCELEROMETER * len(
+            self.config.accelerometers
+        )
+
+        # Set modbus address, offset, and scale for every
+        # LabJack analog input channel to read, in order:
+        # accel 0 x, accel 0 y, accel 0 z, accel 1 x, accel 1 y, ...
+        # Note: The modbus address for analog input "AIN{n}" is 2*n
+        self.modbus_addresses: list[int] = []
+        offsets: list[float] = []
+        scales: list[float] = []
+        for accelerometer in self.accelerometers:
+            self.modbus_addresses += [
+                analog_input * 2 for analog_input in accelerometer.analog_inputs
+            ]
+            offsets += list(accelerometer.offsets)
+            scales += list(accelerometer.scales)
+        self.offsets = np.array(offsets)
+        self.scales = np.array(scales)
+
+        if len(set(self.modbus_addresses)) != len(self.modbus_addresses):
+            raise ValueError("configured input_channels contain one or more duplicates")
+
+        # Set output arrays to NaN. This is not strictly necessary
+        # but makes it easier to see unset array elements.
+        self.psd_topic.set(
             **{
-                f"accelerationPSD{axis}": [math.nan] * self.array_len
+                f"accelerationPSD{axis}": [math.nan] * self.psd_array_len
                 for axis in ("X", "Y", "Z")
             },
         )
-        self.modbus_addresses: list[int] = [ai * 2 for ai in self.config.analog_inputs]
+
         self.loop = asyncio.get_running_loop()
         self.mock_stream_task = utils.make_done_future()
 
@@ -172,12 +205,6 @@ properties:
         * A serial number if connection_type = USB
         * For testing in an environment with only one LabJack you may use ANY
     type: string
-  sensor_name:
-    description: Value for the sensor_name field of the topic.
-    type: string
-  location:
-    description: Location of sensor.
-    type: string
   min_frequency:
     description: >-
         Approximate minimum frequency to report in the PSD (Hz).
@@ -200,30 +227,69 @@ properties:
     type: integer
     minValue: 10
     default: 200
-  analog_inputs:
+  write_acceleration:
+    description: Write the acceleration telemetry topic (calibrated input data)?
+    type: boolean
+  accelerometers:
     description: >-
-        Analog inputs read for x, y, and z data.
-        0 for AIN0, 1 for AIN1, 2 or AIN2, etc.
+      Configuration for each 3-axis accelerometer.
+      Note that the ESS will output separate accelerometerPSD messages
+      for each accelerometer (each with a different value of sensorName).
     type: array
-    minItems: 3
-    maxItems: 3
+    minItems: 1
     items:
-        type: integer
-        minimum: 0
-  scale:
-    description: Accelerometer scale (m/s2 per Volt).
-    type: number
+      type: object
+      properties:
+        sensor_name:
+            description: Value for the sensorName field of the topic.
+            type: string
+        location:
+            description: Location of sensor.
+            type: string
+        analog_inputs:
+            description: >-
+                LabJack analog inputs read for x, y, and z data.
+                0 for AIN0, 1 for AIN1, 2 or AIN2, etc.
+            type: array
+            minItems: 3
+            maxItems: 3
+            items:
+                type: integer
+                minimum: 0
+        offsets:
+            description: >-
+                Accelerometer offsets for x, y, and z data (Volts).
+                Acceleration in m/s2 = (raw - offset) * scale
+            type: array
+            minItems: 3
+            maxItems: 3
+            items:
+                type: number
+        scales:
+            description: >-
+                Accelerometer scales for x, y, and z data (m/s2 per Volt).
+                See offset for more information.
+            type: array
+            minItems: 3
+            maxItems: 3
+            items:
+                type: number
+      required:
+        - sensor_name
+        - location
+        - analog_inputs
+        - offsets
+        - scales
+      additionalProperties: false
 required:
   - device_type
   - connection_type
   - identifier
-  - sensor_name
-  - location
   - min_frequency
   - max_frequency
   - num_frequencies
-  - analog_inputs
-  - scale
+  - write_acceleration
+  - accelerometers
 additionalProperties: false
 """
         )
@@ -380,14 +446,18 @@ additionalProperties: false
         Returns
         -------
         scaled_data : np.ndarray
-            Raw data multiplied by self.config.scale
-            and reshaped to size (num_channels, voltages)
+            Raw data reshaped to size (self.num_channels, voltages)
+            with offsets and scales applied::
+
+                scaled = (raw - offset) * scaled
         """
         npoints = len(raw_1d_data) // self.num_channels
-        return (
-            np.reshape(raw_1d_data, newshape=(self.num_channels, npoints), order="F")
-            * self.config.scale
+        raw_2d_data = np.reshape(
+            raw_1d_data,
+            newshape=(self.num_channels, npoints),
+            order="F",
         )
+        return (raw_2d_data - self.offsets[:, np.newaxis]) * self.scales[:, np.newaxis]
 
     async def callback(
         self, scaled_data: np.ndarray, backlogs: tuple[int, int]
@@ -398,7 +468,7 @@ additionalProperties: false
         ----------
         scaled_data : `np.ndarray`
             x, y, z acceleration data of shape (self.num_channels, n)
-            after scaling by self.config.scale
+            after applying offset and scale
         backlogs : `tuple`
             Two measures of the number of backlogged messages.
             Both values should be nearly zero if the data client
@@ -422,17 +492,55 @@ additionalProperties: false
 
         try:
             psd = np.abs(np.fft.rfft(np.array(scaled_data))) ** 2
-            psd_kwargs = {
-                f"accelerationPSD{axis}": psd[i, self.psd_start_index :]
-                for i, axis in enumerate(("X", "Y", "Z"))
-            }
-            await self.topic.set_write(
-                interval=self.sampling_interval,
-                minPSDFrequency=self.psd_frequencies[self.psd_start_index],
-                maxPSDFrequency=self.psd_frequencies[-1],
-                numDataPoints=self.config.num_frequencies,
-                **psd_kwargs,
-            )
+            for i, accelerometer in enumerate(self.accelerometers):
+                channel_start_index = i * NUM_CHANNELS_PER_ACCELEROMETER
+
+                if self.config.write_acceleration:
+                    # Write scaled acceleration data. If there is more data
+                    # than fits in the arrays, write the data as multiple
+                    # messages.
+                    accel_data_start_index = 0
+                    done_writing_accel = False
+                    while not done_writing_accel:
+                        num_accel_to_write = self.num_samples - accel_data_start_index
+                        if num_accel_to_write > self.accel_array_len:
+                            num_accel_to_write = self.accel_array_len
+                        else:
+                            done_writing_accel = True
+
+                        accel_kwargs = {
+                            f"acceleration{axis}": scaled_data[
+                                channel_start_index + channel_offset,
+                                accel_data_start_index : accel_data_start_index
+                                + num_accel_to_write,
+                            ]
+                            for channel_offset, axis in enumerate(("X", "Y", "Z"))
+                        }
+                        accel_data_start_index += num_accel_to_write
+                        await self.accel_topic.set_write(
+                            sensorName=accelerometer.sensor_name,
+                            location=accelerometer.location,
+                            interval=self.sampling_interval,
+                            numDataPoints=num_accel_to_write,
+                            **accel_kwargs,
+                        )
+
+                # Write PSD data.
+                psd_kwargs = {
+                    f"accelerationPSD{axis}": psd[
+                        channel_start_index + channel_offset, self.psd_start_index :
+                    ]
+                    for channel_offset, axis in enumerate(("X", "Y", "Z"))
+                }
+                await self.psd_topic.set_write(
+                    sensorName=accelerometer.sensor_name,
+                    location=accelerometer.location,
+                    interval=self.sampling_interval,
+                    minPSDFrequency=self.psd_frequencies[self.psd_start_index],
+                    maxPSDFrequency=self.psd_frequencies[-1],
+                    numDataPoints=self.config.num_frequencies,
+                    **psd_kwargs,
+                )
             self.wrote_event.set()
         except Exception:
             self.log.exception("callback failed")
@@ -453,10 +561,10 @@ additionalProperties: false
         super()._blocking_connect()
 
         # Read each input channel, to make sure the configuration is valid.
-        input_channels = [f"AIN{i}" for i in self.config.analog_inputs]
-        num_frames = len(input_channels)
-        values = ljm.eReadNames(self.handle, num_frames, input_channels)
-        if len(values) != len(input_channels):
+        input_channel_names = [f"AIN{addr//2}" for addr in self.modbus_addresses]
+        num_frames = len(input_channel_names)
+        values = ljm.eReadNames(self.handle, num_frames, input_channel_names)
+        if len(values) != len(input_channel_names):
             raise RuntimeError(
-                f"len(input_channels)={input_channels} != len(values)={values}"
+                f"len(input_channel_names)={input_channel_names} != len(values)={values}"
             )

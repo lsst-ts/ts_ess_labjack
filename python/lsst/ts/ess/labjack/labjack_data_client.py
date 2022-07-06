@@ -57,11 +57,6 @@ class LabJackDataClient(BaseLabJackDataClient):
         Logger.
     simulation_mode : `int`, optional
         Simulation mode; 0 for normal operation.
-
-    Notes
-    -----
-    In simulation mode the mock LabJack returns unspecified values,
-    and those values may change in future versions of the LabJack software.
     """
 
     def __init__(
@@ -74,6 +69,7 @@ class LabJackDataClient(BaseLabJackDataClient):
         super().__init__(
             config=config, topics=topics, log=log, simulation_mode=simulation_mode
         )
+        # List of LabJack channel names to read.
         self.channel_names: Sequence[str] = []
 
         # dict of (topic_attr_name, sensor_name): TopicHandler.
@@ -82,6 +78,12 @@ class LabJackDataClient(BaseLabJackDataClient):
         # An event that unit tests can use to wait for data to be written.
         # A test can clear the event, then wait for it to be set.
         self.wrote_event = asyncio.Event()
+
+        # Mock data for simulation mode; if None then use whatever values
+        # LabJack ljm returns (which is not documented).
+        # If specified, it must include one value per channel,
+        # in the same order as self.channel_names.
+        self.mock_raw_data: None | Sequence[float] = None
 
         self.configure()
 
@@ -146,11 +148,11 @@ properties:
           items:
             type: string
         offset:
-          description: SAL value = offset + scale * LabJack value
+          description: SAL value = (LabJack value - offset) * scale
           type: number
           default: 0
         scale:
-          description: SAL value = offset + scale * LabJack value
+          description: SAL value = (LabJack value - offset) * scale
           type: number
           default: 1
       required:
@@ -249,6 +251,9 @@ additionalProperties: false
 
         num_frames = len(self.channel_names)
         values = ljm.eReadNames(self.handle, num_frames, self.channel_names)
+        if self.simulation_mode != 0 and self.mock_raw_data is not None:
+            assert len(self.mock_raw_data) == len(values)
+            values = self.mock_raw_data
         if len(values) != len(self.channel_names):
             raise RuntimeError(
                 f"len(channel_names)={self.channel_names} != len(values)={values}"
