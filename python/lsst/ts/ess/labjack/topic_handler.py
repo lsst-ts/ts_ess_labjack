@@ -136,10 +136,11 @@ class TopicHandler:
         data_dict : `dict` [`str`, `float`]
             dict of LabJack channel name: raw value.
             This may include more channels than this topic needs.
+            SAL value = (LabJack value - offset) * scale
         """
         data_arr = [math.nan] * self.array_len
         for i, channel_name in self.channel_dict.items():
-            data_arr[i] = self.offset + self.scale * data_dict[channel_name]
+            data_arr[i] = (data_dict[channel_name] - self.offset) * self.scale
         data_kwarg = {self.field_name: data_arr}
         await self.topic.set_write(
             sensorName=self.sensor_name,

@@ -27,6 +27,8 @@ import unittest
 import types
 from typing import Any, TypeAlias
 
+import numpy as np
+import pytest
 import yaml
 
 from lsst.ts import salobj
@@ -156,42 +158,79 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
         assert data_client.handle is None
         assert data_client.run_task.done()
 
+        num_channels = 0
+        for topic_handler in topic_handlers:
+            num_channels += len(topic_handler.channel_dict)
+        assert num_channels == 6
+        data_client.mock_raw_data = np.random.random(num_channels)
+        mock_raw_data_dict = {
+            channel_name: value
+            for channel_name, value in zip(
+                data_client.channel_names, data_client.mock_raw_data
+            )
+        }
+
         await data_client.start()
         assert data_client.handle is not None
         assert not data_client.run_task.done()
 
-        # Wait for data to be written, then check it for plausibility
-        # (we do not know what values will be written).
+        # Wait for data to be written, then check it.
         data_client.wrote_event.clear()
         await asyncio.wait_for(data_client.wrote_event.wait(), timeout=TIMEOUT)
 
         # Some fields of 3 topics should have been written.
         data = topic_handlers[0].topic.data_dict["labjack_test_1"]
-        self.check_data(
-            data=data,
-            sensor_name=data.sensorName,
+
+        self.check_topic_handler(
+            topic_handler=topic_handlers[0],
+            topic_name="tel_temperature",
+            sensor_name="labjack_test_1",
             field_name="temperature",
             location="somewhere, nowhere, somewhere else, guess",
-            good_indices={0, 2, 3},
-            expected_len=16,
+            offset=1.5,
+            scale=-2.1,
+            channel_dict={0: "AIN0", 2: "AIN3", 3: "AIN2"},
+            array_len=16,
+        )
+        self.check_topic_handler(
+            topic_name="tel_pressure",
+            topic_handler=topic_handlers[1],
+            sensor_name="labjack_test_2",
+            field_name="pressure",
+            location="top of stack, bottom of stack",
+            offset=0,
+            scale=1,
+            channel_dict={0: "AIN4", 1: "AIN5"},
+            array_len=8,
+        )
+        self.check_topic_handler(
+            topic_name="tel_temperature",
+            topic_handler=topic_handlers[2],
+            sensor_name="labjack_test_3",
+            field_name="temperature",
+            location="none, here",
+            offset=0,
+            scale=1,
+            channel_dict={1: "AIN6"},
+            array_len=16,
+        )
+
+        self.check_data(
+            data=data,
+            topic_handler=topic_handlers[0],
+            raw_data_dict=mock_raw_data_dict,
         )
         data = topic_handlers[1].topic.data_dict["labjack_test_2"]
         self.check_data(
             data=data,
-            sensor_name=data.sensorName,
-            field_name="pressure",
-            location="top of stack, bottom of stack",
-            good_indices={0, 1},
-            expected_len=8,
+            topic_handler=topic_handlers[1],
+            raw_data_dict=mock_raw_data_dict,
         )
         data = topic_handlers[2].topic.data_dict["labjack_test_3"]
         self.check_data(
             data=data,
-            sensor_name=data.sensorName,
-            field_name="temperature",
-            location="none, here",
-            good_indices={1},
-            expected_len=16,
+            topic_handler=topic_handlers[2],
+            raw_data_dict=mock_raw_data_dict,
         )
 
         await data_client.stop()
@@ -205,41 +244,80 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
     def check_data(
         self,
         data: Any,
-        sensor_name: str,
-        field_name: str,
-        location: str,
-        good_indices: set[int],
-        expected_len: int,
+        topic_handler: labjack.TopicHandler,
+        raw_data_dict: dict[str, float],
     ) -> None:
         """Check topic data.
-
-        We have no idea what the array values should be so just check
-        that the expected indices are finite or nan.
 
         Parameters
         ----------
         data : Any
             The data
+        topic_handler : labjack.TopicHandler
+            Topic handler for this topic.
         sensor_name : str
             Sensor name.
         location: str
             Location string.
         field_name: str
             Name of array-valued field.
-        good_indices : `set` [`int`]
-            Indices of values expected to be finite.
-        expected_len : `int`
-            Expected length of the array.
+        raw_data_dict : `list` [`float`]
+            Expected raw values, as a dict of channel_name: value
         """
-        assert data.sensorName == sensor_name
-        assert data.location == location
-        data_arr = getattr(data, field_name)
-        assert len(data_arr) == expected_len
-        for i in range(expected_len):
-            if i in good_indices:
-                assert math.isfinite(data_arr[i])
-            else:
+        assert data.sensorName == topic_handler.sensor_name
+        assert data.location == topic_handler.location
+        data_arr = getattr(data, topic_handler.field_name)
+        assert len(data_arr) == topic_handler.array_len
+        for i in range(topic_handler.array_len):
+            channel_name = topic_handler.channel_dict.get(i, None)
+            if channel_name is None:
                 assert math.isnan(data_arr[i])
+            else:
+                expected_scaled = (
+                    raw_data_dict[channel_name] - topic_handler.offset
+                ) * topic_handler.scale
+                assert data_arr[i] == pytest.approx(expected_scaled)
+                assert math.isfinite(data_arr[i])
+
+    def check_topic_handler(
+        self,
+        topic_handler: labjack.TopicHandler,
+        topic_name: str,
+        sensor_name: str,
+        field_name: str,
+        location: str,
+        offset: float,
+        scale: float,
+        array_len: int,
+        channel_dict: dict[int, str],
+    ) -> None:
+        """Check the attributes of a topic handler.
+
+        Parameters
+        ----------
+        topic_handler : labjack.TopicHandler
+            Topic handler for this topic.
+        topic_name : `str`
+            Topic attribute name.
+        sensor_name : `str`
+            Expected sensor name.
+        location: str
+            Expected location string.
+        field_name: `str`
+            Expected name of array-valued field.
+        array_len : `int`
+            Expected length of the array.
+        channel_dict : `dict` [`int`, `str`]
+            Expected dict of array index: LabJack channel name
+        """
+        assert topic_handler.sensor_name == sensor_name
+        assert topic_handler.topic.attr_name == topic_name
+        assert topic_handler.location == location
+        assert topic_handler.field_name == field_name
+        assert topic_handler.offset == pytest.approx(offset)
+        assert topic_handler.scale == pytest.approx(scale)
+        assert topic_handler.array_len == array_len
+        assert topic_handler.channel_dict == channel_dict
 
     def get_config(self, filename: PathT) -> types.SimpleNamespace:
         """Get a config dict from tests/data.
