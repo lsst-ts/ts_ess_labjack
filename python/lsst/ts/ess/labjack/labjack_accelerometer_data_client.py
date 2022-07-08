@@ -39,6 +39,10 @@ from .base_labjack_data_client import BaseLabJackDataClient
 # Time limit for communicating with the LabJack (seconds).
 COMMUNICATION_TIMEOUT = 5
 
+# Time limit for configuring streaming;
+# measured time from far away is 6 seconds.
+START_STREAMING_TIMEOUT = 15
+
 # Maximum sampling frequency (Hz) that the simulator allows.
 MAX_MOCK_SAMPLE_FREQUENCY = 1000
 
@@ -161,6 +165,9 @@ class LabJackAccelerometerDataClient(BaseLabJackDataClient):
 
         self.loop = asyncio.get_running_loop()
         self.mock_stream_task = utils.make_done_future()
+
+        # A task that monitors self.process_data
+        self.process_data_task = utils.make_done_future()
 
         # In simulation mode controls whether the client generates
         # random mock_raw_1d_data (producing garbage PSDs).
@@ -304,16 +311,18 @@ additionalProperties: false
 
     async def disconnect(self) -> None:
         self.mock_stream_task.cancel()
-        if self.handle is not None:
-            await self.stop_data_stream()
+        self.process_data_task.cancel()
         await super().disconnect()
 
     async def start_data_stream(self) -> None:
         """Start the data stream from the LabJack."""
 
-        return await self.run_in_thread(
-            func=self._blocking_start_data_stream, timeout=COMMUNICATION_TIMEOUT
+        t0 = utils.current_tai()
+        await self.run_in_thread(
+            func=self._blocking_start_data_stream, timeout=START_STREAMING_TIMEOUT
         )
+        dt = utils.current_tai() - t0
+        self.log.debug(f"start_data_stream took {dt:0.2f} seconds")
 
     def start_mock_stream(self) -> None:
         """Start a mock stream, since ljm demo mode does not stream."""
@@ -344,7 +353,7 @@ additionalProperties: false
                 await asyncio.sleep(sleep_interval)
                 if self.mock_raw_1d_data is not None:
                     scaled_data = self.scaled_data_from_raw(self.mock_raw_1d_data)
-                await self.callback(scaled_data, (0, 0))
+                self.start_processing_data(scaled_data, (0, 0))
         except asyncio.CancelledError:
             self.log.info("mock_stream ends")
         except Exception:
@@ -414,24 +423,20 @@ additionalProperties: false
             f"max_frequency={self.psd_frequencies[-1]:0.2f}"
         )
 
-    def _blocking_stop_data_stream(self) -> None:
-        """Stop streaming data from the LabJack.
-
-        Call in a thread to avoid blocking the event loop.
-        """
-        # LabJack ljm demo mode does not support streaming,
-        # but this call seems to work anyway.
-        ljm.eStreamStop(self.handle)
-
     def blocking_data_stream_callback(self, handle: int) -> None:
         """Called in a thread when a full set of stream data is available."""
-        (
-            raw_1d_data,
-            backlog1,
-            backlog2,
-        ) = ljm.eStreamRead(self.handle)
-        scaled_data = self.scaled_data_from_raw(raw_1d_data)
-        self.loop.call_soon_threadsafe(self.callback, scaled_data, (backlog1, backlog2))
+        try:
+            (
+                raw_1d_data,
+                backlog1,
+                backlog2,
+            ) = ljm.eStreamRead(self.handle)
+            scaled_data = self.scaled_data_from_raw(raw_1d_data)
+            self.loop.call_soon_threadsafe(
+                self.start_processing_data, scaled_data, (backlog1, backlog2)
+            )
+        except Exception as e:
+            self.log.error(f"blocking_data_stream_callback failed: {e!r}")
 
     def scaled_data_from_raw(self, raw_1d_data: list[float]) -> np.ndarray:
         """Convert a list of 1-D raw readings to 2-d scaled data.
@@ -459,7 +464,30 @@ additionalProperties: false
         )
         return (raw_2d_data - self.offsets[:, np.newaxis]) * self.scales[:, np.newaxis]
 
-    async def callback(
+    def start_processing_data(
+        self, scaled_data: np.ndarray, backlogs: tuple[int, int]
+    ) -> None:
+        """Start process_data as a background task, unless still running.
+
+        Parameters
+        ----------
+        scaled_data : `np.ndarray`
+            x, y, z acceleration data of shape (self.num_channels, n)
+            after applying offset and scale
+        backlogs : `tuple`
+            Two measures of the number of backlogged messages.
+            Both values should be nearly zero if the data client
+            is keeping up with the LabJack.
+        """
+        if not self.process_data_task.done():
+            self.log.warning(
+                "An older process_data background task is still running; skipping this data"
+            )
+        self.process_data_task = asyncio.create_task(
+            self.process_data(scaled_data=scaled_data, backlogs=backlogs)
+        )
+
+    async def process_data(
         self, scaled_data: np.ndarray, backlogs: tuple[int, int]
     ) -> None:
         """Process one set of data.
@@ -543,15 +571,8 @@ additionalProperties: false
                 )
             self.wrote_event.set()
         except Exception:
-            self.log.exception("callback failed")
+            self.log.exception("process_data failed")
             raise
-
-    async def stop_data_stream(self) -> None:
-        """Stop the data stream from the LabJack."""
-        self.mock_stream_task.cancel()
-        await self.run_in_thread(
-            func=self._blocking_stop_data_stream, timeout=COMMUNICATION_TIMEOUT
-        )
 
     def _blocking_connect(self) -> None:
         """Connect and then read the specified channels.

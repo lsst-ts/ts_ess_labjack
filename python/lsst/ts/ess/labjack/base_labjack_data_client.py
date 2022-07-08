@@ -110,6 +110,10 @@ class BaseLabJackDataClient(common.BaseDataClient):
             return await asyncio.wait_for(
                 loop.run_in_executor(self._thread_pool, func), timeout=timeout
             )
+        except asyncio.CancelledError:
+            self.log.info(
+                f"run_in_thread cancelled while running blocking function {func}."
+            )
         except Exception:
             self.log.exception(f"Blocking function {func} failed.")
             raise
@@ -141,7 +145,7 @@ class BaseLabJackDataClient(common.BaseDataClient):
             self.handle = None
 
     def _blocking_connect(self) -> None:
-        """Connect to the LabJack.
+        """Connect to the LabJack and stop streaming (if active).
 
         Disconnect first, if connected.
 
@@ -164,14 +168,51 @@ class BaseLabJackDataClient(common.BaseDataClient):
         self.handle = ljm.openS(
             self.config.device_type, self.config.connection_type, identifier
         )
+        self._blocking_stop_data_stream()
 
     def _blocking_disconnect(self) -> None:
-        """Disconnect from the LabJack. A no-op if disconnected.
+        """Disconnect from the LabJack after stopping streaming.
+
+        A no-op if disconnected.
 
         Call in a thread to avoid blocking the event loop.
         """
         if self.handle is not None:
             try:
+                self._blocking_stop_data_stream()
                 ljm.close(self.handle)
             finally:
                 self.handle = None
+
+    def _blocking_stop_data_stream(self) -> None:
+        """Try to stop streaming data from the LabJack.
+
+        This is intended as a "best effort" basis and is meant to always
+        be safe to call. Thus this traps and logs ljm.LJMError (which is
+        the only expected exception). We recommend calling this:
+
+        * Just before disconnecting (self.disconnect does this),
+          in case the data client has enabled streaming.
+        * Just after connecting (self.connect does this),
+          in case the LabJack was accidentally left in streaming mode.
+
+        Call in a thread to avoid blocking the event loop.
+
+
+        """
+        # LabJack ljm demo mode does not support streaming,
+        # but this call seems to work anyway.
+        try:
+            ljm.eStreamStop(self.handle)
+        except ljm.LJMError as e:
+            # Note: I would rather compare e.errorCode to
+            # ljm.errorcodes.STREAM_NOT_RUNNING = 1303,
+            # but the error code is 2620, which does not match any constant
+            # in ljm.errorcodes.
+            if e.errorString == "STREAM_NOT_RUNNING":
+                pass
+            else:
+                self.log.warning(
+                    "Could not stop LabJack streaming, but continuing anyway: "
+                    f"{e!r}: {e.errorString=}"
+                )
