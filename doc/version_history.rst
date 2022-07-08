@@ -6,6 +6,13 @@
 Version History
 ###############
 
+v0.6.1
+------
+
+* `BaseLabJackDataClient`: stop streaming when connecting and disconnecting.
+  This deals with a LabJack left in a strange state.
+* `LabJackAccelerometerDataClient`: fix an error in the streaming callback and increase the timeout for starting streaming.
+
 v0.6.0
 ------
 
