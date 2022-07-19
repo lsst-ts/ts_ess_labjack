@@ -6,6 +6,11 @@
 Version History
 ###############
 
+v0.6.2
+------
+
+* `LabJackAccelerometerDataClient`: fix scaling of published PSD data.
+
 v0.6.1
 ------
 
