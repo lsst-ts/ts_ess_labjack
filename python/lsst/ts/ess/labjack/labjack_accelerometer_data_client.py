@@ -464,6 +464,13 @@ additionalProperties: false
         )
         return (raw_2d_data - self.offsets[:, np.newaxis]) * self.scales[:, np.newaxis]
 
+    def psd_from_scaled_data(self, scaled_data: np.ndarray) -> np.ndarray:
+        """Compute the PSD from scaled data."""
+        return (
+            np.abs(np.fft.rfft(scaled_data) * self.sampling_interval / self.num_samples)
+            ** 2
+        )
+
     def start_processing_data(
         self, scaled_data: np.ndarray, backlogs: tuple[int, int]
     ) -> None:
@@ -519,7 +526,7 @@ additionalProperties: false
             return
 
         try:
-            psd = np.abs(np.fft.rfft(np.array(scaled_data))) ** 2
+            psd = self.psd_from_scaled_data(scaled_data)
             for i, accelerometer in enumerate(self.accelerometers):
                 channel_start_index = i * NUM_CHANNELS_PER_ACCELEROMETER
 
