@@ -27,13 +27,13 @@ import math
 import types
 from typing import Any
 
-# Hide mypy error `Module "labjack" has no attribute "ljm"`.
-from labjack import ljm  # type: ignore
 import numpy as np
 import yaml
 
-from lsst.ts import salobj
-from lsst.ts import utils
+# Hide mypy error `Module "labjack" has no attribute "ljm"`.
+from labjack import ljm  # type: ignore
+from lsst.ts import salobj, utils
+
 from .base_labjack_data_client import BaseLabJackDataClient
 
 # Time limit for communicating with the LabJack (seconds).

@@ -31,10 +31,8 @@ from typing import Any
 
 # Hide mypy error `Module "labjack" has no attribute "ljm"`.
 from labjack import ljm  # type: ignore
-
-from lsst.ts.ess import common
-
 from lsst.ts import salobj
+from lsst.ts.ess import common
 
 # Time limit for connecting to the LabJack (seconds).
 CONNECT_TIMEOUT = 5

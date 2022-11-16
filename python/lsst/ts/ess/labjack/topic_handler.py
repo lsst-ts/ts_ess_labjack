@@ -24,8 +24,7 @@ __all__ = ["TopicHandler"]
 import math
 from collections.abc import Sequence
 
-from lsst.ts import salobj
-from lsst.ts import utils
+from lsst.ts import salobj, utils
 
 
 class TopicHandler:

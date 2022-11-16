@@ -27,11 +27,12 @@ import types
 from collections.abc import Sequence
 from typing import Any
 
-# Hide mypy error `Module "labjack" has no attribute "ljm"`.
-from labjack import ljm  # type: ignore
 import yaml
 
+# Hide mypy error `Module "labjack" has no attribute "ljm"`.
+from labjack import ljm  # type: ignore
 from lsst.ts import salobj
+
 from .base_labjack_data_client import BaseLabJackDataClient
 from .topic_handler import TopicHandler
 

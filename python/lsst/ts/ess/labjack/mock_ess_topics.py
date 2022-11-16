@@ -25,9 +25,9 @@ __all__ = [
     "MockESSAccelerometerTopic",
 ]
 
+import copy
 import dataclasses
 from collections.abc import Sequence
-import copy
 from typing import Any, Type
 
 
