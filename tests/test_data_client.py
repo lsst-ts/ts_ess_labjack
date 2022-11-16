@@ -23,17 +23,15 @@ import asyncio
 import logging
 import math
 import pathlib
-import unittest
 import types
+import unittest
 from typing import Any, TypeAlias
 
 import numpy as np
 import pytest
 import yaml
-
 from lsst.ts import salobj
-from lsst.ts.ess import common
-from lsst.ts.ess import labjack
+from lsst.ts.ess import common, labjack
 
 logging.basicConfig(
     format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG

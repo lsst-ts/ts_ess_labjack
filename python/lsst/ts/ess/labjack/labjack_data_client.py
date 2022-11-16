@@ -27,11 +27,12 @@ import types
 from collections.abc import Sequence
 from typing import Any
 
-# Hide mypy error `Module "labjack" has no attribute "ljm"`.
-from labjack import ljm  # type: ignore
 import yaml
 
+# Hide mypy error `Module "labjack" has no attribute "ljm"`.
+from labjack import ljm  # type: ignore
 from lsst.ts import salobj
+
 from .base_labjack_data_client import BaseLabJackDataClient
 from .topic_handler import TopicHandler
 
@@ -254,6 +255,10 @@ additionalProperties: false
         if self.simulation_mode != 0 and self.mock_raw_data is not None:
             assert len(self.mock_raw_data) == len(values)
             values = self.mock_raw_data
+        else:
+            self.log.debug(
+                "read values %s from channels %s", values, self.channel_names
+            )
         if len(values) != len(self.channel_names):
             raise RuntimeError(
                 f"len(channel_names)={self.channel_names} != len(values)={values}"

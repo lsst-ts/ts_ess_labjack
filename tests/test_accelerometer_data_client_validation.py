@@ -30,7 +30,6 @@ from typing import Any, TypeAlias
 import jsonschema
 import pytest
 import yaml
-
 from lsst.ts import salobj
 from lsst.ts.ess import labjack
 
