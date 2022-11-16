@@ -6,6 +6,12 @@
 Version History
 ###############
 
+v0.6.3
+------
+
+* `LabJackDataClient`: log raw data as it is read, at debug level.
+* Configure pre-commit to run isort and mypy.
+
 v0.6.2
 ------
 
