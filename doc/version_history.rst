@@ -6,6 +6,11 @@
 Version History
 ###############
 
+v0.6.4
+------
+
+* pre-commit: update software versions.
+
 v0.6.3
 ------
 
