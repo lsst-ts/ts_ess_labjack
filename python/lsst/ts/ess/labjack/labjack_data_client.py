@@ -84,7 +84,7 @@ class LabJackDataClient(BaseLabJackDataClient):
         # LabJack ljm returns (which is not documented).
         # If specified, it must include one value per channel,
         # in the same order as self.channel_names.
-        self.mock_raw_data: None | Sequence[float] = None
+        self.mock_raw_data: Sequence[float] | None = None
 
         self.configure()
 
