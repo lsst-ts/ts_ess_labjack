@@ -6,6 +6,12 @@
 Version History
 ###############
 
+v0.6.5
+------
+
+* `LabJackAccelerometerDataClient`: fix ``accelerometer`` topic output.
+* ``Jenkinsfile``: do not run as root.
+
 v0.6.4
 ------
 

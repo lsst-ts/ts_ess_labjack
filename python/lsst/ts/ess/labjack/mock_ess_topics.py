@@ -25,6 +25,7 @@ __all__ = [
     "MockESSAccelerometerTopic",
 ]
 
+import collections
 import copy
 import dataclasses
 from collections.abc import Sequence
@@ -60,16 +61,17 @@ class BaseMockEssTopic:
         Dataclass class (not instance) for topic data.
     data : `dataclasses.dataclass`
         The data most recently written by `set`
-    data_dict : `dict` [`str`, dataclass]
-        The data most recently written by `set_write`
-        as a dict of sensor_name: data.
+    data_dict : `dict` [`str`, `list` [dataclass]]
+        The data written by `set_write`,
+        as a dict of sensor_name: list of data written.
     """
 
     def __init__(self, attr_name: str, DataType: Type[Any]) -> None:
         self.attr_name = attr_name
         self.DataType = DataType
         self.data = DataType()
-        self.data_dict: dict[str, Any] = dict()
+        # Dict of sensor name: list of data written for that sensor
+        self.data_dict: dict[str, Any] = collections.defaultdict(list)
 
         # Dict of field_name: array length for array-valued fields.
         self._array_field_lengths = {
@@ -80,11 +82,7 @@ class BaseMockEssTopic:
         self._field_names = vars(self.data).keys()
 
     def set(self, **kwargs: Any) -> Any:
-        """Set self.data_dict[sensorName] = data.
-
-        where data is a dataclass that mimics the SAL topic data type,
-        but without the private fields or the ESSID field.
-        The data also has no get_vars method.
+        """Set self.data.
 
         Parameters
         ----------
@@ -112,18 +110,18 @@ class BaseMockEssTopic:
             if field_len is not None:
                 old_value = getattr(self.data, field_name)
                 new_len = len(new_value)
-                nextra = field_len - new_len
-                if nextra < 0:
+                if field_len != new_len:
                     raise ValueError(
-                        f"{field_name}={new_value} longer than {field_len} elements"
+                        f"{field_name} has length {field_len} != {new_len}=len(new value)"
                     )
                 new_value = list(new_value) + old_value[new_len:]
             setattr(self.data, field_name, new_value)
-        return copy.copy(self.data)
+        return copy.deepcopy(self.data)
 
     async def set_write(self, **kwargs: Any) -> None:
+        """Set self.data and cache a deep copy in self.data_dict."""
         new_data = self.set(**kwargs)
-        self.data_dict[self.data.sensorName] = new_data
+        self.data_dict[self.data.sensorName].append(new_data)
 
     async def write(self) -> None:
         pass
@@ -187,7 +185,6 @@ class MockESSAccelerometerPSDTopic(BaseMockEssTopic):
     """
 
     def __init__(self) -> None:
-
         get_zeros = GetListOfZeros(field_len=200)
 
         DataType = dataclasses.make_dataclass(
@@ -199,21 +196,16 @@ class MockESSAccelerometerPSDTopic(BaseMockEssTopic):
                 ("minPSDFrequency", float, dataclasses.field(default=0)),  # type: ignore
                 ("maxPSDFrequency", float, dataclasses.field(default=0)),  # type: ignore
                 ("numDataPoints", int, dataclasses.field(default=0)),  # type: ignore
+            ]
+            + [
                 (
-                    "accelerationPSDX",
+                    f"accelerationPSD{axis}",
                     list[float],
                     dataclasses.field(default_factory=get_zeros),  # type: ignore
-                ),
-                (
-                    "accelerationPSDY",
-                    list[float],
-                    dataclasses.field(default_factory=get_zeros),  # type: ignore
-                ),
-                (
-                    "accelerationPSDZ",
-                    list[float],
-                    dataclasses.field(default_factory=get_zeros),  # type: ignore
-                ),
+                )
+                for axis in ("X", "Y", "Z")
+            ]
+            + [
                 ("location", str, dataclasses.field(default="")),  # type: ignore
             ],
         )
@@ -234,7 +226,6 @@ class MockESSAccelerometerTopic(BaseMockEssTopic):
     """
 
     def __init__(self) -> None:
-
         get_zeros = GetListOfZeros(field_len=200)
 
         DataType = dataclasses.make_dataclass(
@@ -243,22 +234,16 @@ class MockESSAccelerometerTopic(BaseMockEssTopic):
                 ("sensorName", str, dataclasses.field(default="")),  # type: ignore
                 ("timestamp", float, dataclasses.field(default=0)),  # type: ignore
                 ("interval", float, dataclasses.field(default=0)),  # type: ignore
-                ("numDataPoints", int, dataclasses.field(default=0)),  # type: ignore
+            ]
+            + [
                 (
-                    "accelerationX",
+                    f"acceleration{axis}",
                     list[float],
                     dataclasses.field(default_factory=get_zeros),  # type: ignore
-                ),
-                (
-                    "accelerationY",
-                    list[float],
-                    dataclasses.field(default_factory=get_zeros),  # type: ignore
-                ),
-                (
-                    "accelerationZ",
-                    list[float],
-                    dataclasses.field(default_factory=get_zeros),  # type: ignore
-                ),
+                )
+                for axis in ("X", "Y", "Z")
+            ]
+            + [
                 ("location", str, dataclasses.field(default="")),  # type: ignore
             ],
         )
