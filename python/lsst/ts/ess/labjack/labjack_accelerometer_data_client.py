@@ -22,6 +22,8 @@
 __all__ = ["LabJackAccelerometerDataClient"]
 
 import asyncio
+import collections.abc
+import itertools
 import logging
 import math
 import types
@@ -43,8 +45,9 @@ COMMUNICATION_TIMEOUT = 5
 # measured time from far away is 6 seconds.
 START_STREAMING_TIMEOUT = 15
 
-# Maximum sampling frequency (Hz) that the simulator allows.
-MAX_MOCK_SAMPLE_FREQUENCY = 1000
+# Maximum frequency (Hz) at which the mock simulator can read an input.
+# The max read frequency per channel = MAX_MOCK_READ_FREQUENCY / num channels.
+MAX_MOCK_READ_FREQUENCY = 10000
 
 # Smallest allowed max_frequency / config.min_frequency.
 MIN_FREQUENCY_RATIO = 2
@@ -52,6 +55,28 @@ MIN_FREQUENCY_RATIO = 2
 # Number of channels per accelerometer
 # We assume a 3-axis accelerometr: x, y, z
 NUM_CHANNELS_PER_ACCELEROMETER = 3
+
+# Number of accelerometer arrays full of random data to auto-generate.
+# 5 gives a few unique accelerometer messages to cycle through,
+# without using a crazy amount of memory.
+NUM_RANDOM_ACCEL_ARRAYS = 5
+
+
+def set_partial_array(
+    data: Any, field_name: str, values: collections.abc.Collection[float]
+) -> None:
+    """Set an array field in a struct with a set of values that may be shorter.
+
+    Pad with NaN.
+    """
+    field_arr = getattr(data, field_name)
+    field_len = len(field_arr)
+    num_values = len(values)
+    num_nans = field_len - num_values
+    if num_nans < 0:
+        raise ValueError(f"{field_name} len={field_len} < num values={num_values}")
+    field_arr[:num_values] = values
+    field_arr[num_values:] = [math.nan] * num_nans
 
 
 class LabJackAccelerometerDataClient(BaseLabJackDataClient):
@@ -72,10 +97,54 @@ class LabJackAccelerometerDataClient(BaseLabJackDataClient):
     simulation_mode : `int`, optional
         Simulation mode; 0 for normal operation.
 
+    Attributes
+    ----------
+    accelerometers : `list` [`types.SimpleNamespace`]
+        List of configuration for each accelerometer.
+    num_channels : `int`
+        Number of accelerometer channels to read (3 per accelerometer).
+    num_samples_per_psd : `int`
+        The number of acceleration samples used to compute the PSD
+        for one channel.
+    psd_frequencies : `np.ndarray`
+        Array of frequences for the computed PSD, starting from 0.
+    psd_start_index : `int`
+        Index of first PSD value to report (>0 if the minimum frequency
+        is greater than 0)*.
+    sampling_interval : `float`
+        Interval between samples for one channel (seconds)*.
+    offsets : `ndarray`
+        Offset for each accelerometer channel.
+        scaled acceleration = (raw acceleration - offset) * scale
+    scales : `ndarray`
+        Scale for each accelerometer channel; see ``offsets`` for details.
+    make_random_mock_raw_1d_data: `bool`
+        In simulation mode controls whether the client generates random
+        mock_raw_1d_data (producing garbage PSDs).
+        By default it is True, so that some output is produced.
+        Set it to False if you would rather generate the raw data yourself,
+        in which case the topic is not written until you set
+        ``mock_raw_1d_data``.
+    mock_raw_1d_data: `list` [`float`] | `None`
+        Unit tests may set this to a list of floats with length
+        containing raw acceleration values for:
+        [v0_chan0, v0_chan1, v0_chan2, v1_chan0, v1_chan1, v1_chan2,
+        ..., vn_chan0, vn_chan1, vn_chan2].
+        In simulation mode this will be cycled over to provide the
+        raw acceleration data.
+        If None and if make_random_mock_raw_1d_data is true
+        then it will be set to random data when first needed.
+    wrote_psd_event: `asyncio.Event`
+        An event that unit tests can use to wait for PSD data to be written.
+        A test can clear the event, then wait for it to be set.
+
     Notes
     -----
     In simulation mode the mock LabJack returns unspecified values,
     and those values may change in future versions of the LabJack software.
+
+    Attributes marked with * are set when sampling begins,
+    because the exact values depend on a value returned by the LabJack.
     """
 
     def __init__(
@@ -89,11 +158,13 @@ class LabJackAccelerometerDataClient(BaseLabJackDataClient):
             config=config, topics=topics, log=log, simulation_mode=simulation_mode
         )
 
-        self.psd_topic = topics.tel_accelerometerPSD
         self.accel_topic = topics.tel_accelerometer
+        self.psd_topic = topics.tel_accelerometerPSD
 
-        self.psd_array_len = len(self.psd_topic.DataType().accelerationPSDX)
+        # Length of the array fields in the accelerometer topic.
         self.accel_array_len = len(self.accel_topic.DataType().accelerationX)
+        # Length of the array fields in the accelerometerPSD topic.
+        self.psd_array_len = len(self.psd_topic.DataType().accelerationPSDX)
 
         if config.min_frequency * MIN_FREQUENCY_RATIO > config.max_frequency:
             raise ValueError(
@@ -102,40 +173,39 @@ class LabJackAccelerometerDataClient(BaseLabJackDataClient):
                 f"= {config.max_frequency / MIN_FREQUENCY_RATIO}"
             )
 
-        # List of accelerometer config as simple namespaces (structs);
-        # this is easier to work with self.config.accelerometers,
-        # which is a list of dicts.
         self.accelerometers = [
             types.SimpleNamespace(**accel_dict)
             for accel_dict in self.config.accelerometers
         ]
 
-        # Interval between samples (seconds).
-        # Set by _blocking_start_data_stream
-        # since the LabJack may offer a smaller value than requested.
-        self.sampling_interval: None | float = None
+        self.num_channels = NUM_CHANNELS_PER_ACCELEROMETER * len(
+            self.config.accelerometers
+        )
 
-        # Number of samples (per channel) to measure PSD.
         num_frequencies_from_0 = round(
             config.num_frequencies
             * config.max_frequency
             / (config.max_frequency - config.min_frequency)
         )
-        self.num_samples = num_frequencies_from_0 * 2 - 2
+        self.num_samples_per_psd = num_frequencies_from_0 * 2 - 2
 
-        # Starting index of PSD, to get the subset of frequencies
-        # that we want to report. Set in _blocking_start_data_stream.
-        self.psd_start_index: None | int = None
+        self.psd_frequencies: np.ndarray | None = None
 
-        # Frequencies of the PSD, starting from 0.
-        # Set in _blocking_start_data_stream.
-        self.psd_frequencies: None | np.ndarray = None
+        self.psd_start_index: int | None = None
 
-        self.num_channels = NUM_CHANNELS_PER_ACCELEROMETER * len(
-            self.config.accelerometers
+        self.sampling_interval: float | None = None
+
+        # Buffer for scaled acceleration data that holds just enough data
+        # to compute one PSD.
+        self.accel_accumulator = np.zeros(
+            shape=(self.num_channels, self.num_samples_per_psd)
         )
+        # The number of entries accumulated (per channel).
+        self.num_accumulated = 0
+        # The TAI date at which accumulation started.
+        self.accel_accumulator_start_tai = 0.0
 
-        # Set modbus address, offset, and scale for every
+        # Set modbus address, {offset}, and scale for every
         # LabJack analog input channel to read, in order:
         # accel 0 x, accel 0 y, accel 0 z, accel 1 x, accel 1 y, ...
         # Note: The modbus address for analog input "AIN{n}" is 2*n
@@ -154,40 +224,16 @@ class LabJackAccelerometerDataClient(BaseLabJackDataClient):
         if len(set(self.modbus_addresses)) != len(self.modbus_addresses):
             raise ValueError("configured input_channels contain one or more duplicates")
 
-        # Set output arrays to NaN. This is not strictly necessary
-        # but makes it easier to see unset array elements.
-        self.psd_topic.set(
-            **{
-                f"accelerationPSD{axis}": [math.nan] * self.psd_array_len
-                for axis in ("X", "Y", "Z")
-            },
-        )
-
         self.loop = asyncio.get_running_loop()
         self.mock_stream_task = utils.make_done_future()
 
         # A task that monitors self.process_data
         self.process_data_task = utils.make_done_future()
 
-        # In simulation mode controls whether the client generates
-        # random mock_raw_1d_data (producing garbage PSDs).
-        # By default it is True, so that some output is produced.
-        # Set it to False if you would rather generate the raw data yourself,
-        # in which case the topic is not written until
-        # you set self.mock_raw_1d_data.
         self.make_random_mock_raw_1d_data = True
-        # Unit tests may set this to a list of floats
-        # with length 3 * self.num_samples containing:
-        # [v0_chan0, v0_chan1, v0_chan2, v1_chan0, v1_chan1, v1_chan2,
-        # ..., vn_chan0, vn_chan1, vn_chan2].
-        # In simulation mode this will be used used to compute the PSDs.
-        # If None and if make_random_mock_raw_1d_data is true
-        # then it will be set to random data when first needed.
-        self.mock_raw_1d_data: None | list[float] = None
+        self.mock_raw_1d_data: list[float] | None = None
 
-        # An event that unit tests can use to wait for data to be written.
-        # A test can clear the event, then wait for it to be set.
-        self.wrote_event = asyncio.Event()
+        self.wrote_psd_event = asyncio.Event()
 
     @classmethod
     def get_config_schema(cls) -> dict[str, Any]:
@@ -301,6 +347,12 @@ additionalProperties: false
 """
         )
 
+    def acquisition_time(self, num_samples: int) -> float:
+        """Compute how long it takes to acquire a given # of samples."""
+        if self.sampling_interval is None:
+            raise RuntimeError("Sampling has not been configured")
+        return self.sampling_interval * (num_samples - 1)
+
     def descr(self) -> str:
         return f"identifier={self.config.identifier}"
 
@@ -335,25 +387,37 @@ additionalProperties: false
     async def _mock_stream(self) -> None:
         """Pretend to stream data.
 
-        Stream self.mock_raw_1d_data.
-        If that is None then set it to a random array.
+        Stream self.mock_raw_1d_data, cycling through it forever.
+        If self.mock_raw_1d_data is None and
+        self.make_random_mock_raw_1d_data is true (the default), set it to
+        a random array long enough for NUM_RANDOM_ACCEL_ARRAYS raw reads.
         """
         self.log.info("mock_stream begins")
-        if self.sampling_interval is None:
-            raise RuntimeError("Streaming not started")
         try:
-            sleep_interval = self.sampling_interval * self.num_samples
+            if self.sampling_interval is None:
+                raise RuntimeError("Sampling has not been configured.")
+
+            sleep_interval = self.acquisition_time(self.accel_array_len)
+            mock_raw_iter: collections.abc.Iterator[float] | None = None
+            num_raw_samples = (
+                NUM_RANDOM_ACCEL_ARRAYS * self.accel_array_len * self.num_channels
+            )
             if self.mock_raw_1d_data is None and self.make_random_mock_raw_1d_data:
                 # Generate random mock data
                 # using half the available scale of -10 to 10 volts.
-                self.mock_raw_1d_data = list(
-                    np.random.random(self.num_samples * self.num_channels) * 10 - 5
-                )
+                self.mock_raw_1d_data = list(np.random.random(num_raw_samples) * 10 - 5)
             while True:
                 await asyncio.sleep(sleep_interval)
                 if self.mock_raw_1d_data is not None:
-                    scaled_data = self.scaled_data_from_raw(self.mock_raw_1d_data)
-                self.start_processing_data(scaled_data, (0, 0))
+                    if mock_raw_iter is None:
+                        mock_raw_iter = itertools.cycle(self.mock_raw_1d_data)
+                    next_raw_arr = [
+                        next(mock_raw_iter)
+                        for _ in range(self.accel_array_len * self.num_channels)
+                    ]
+                    end_tai = utils.current_tai()
+                    scaled_data = self.scaled_data_from_raw(next_raw_arr)
+                self.start_processing_data(scaled_data, end_tai, (0, 0))
         except asyncio.CancelledError:
             self.log.info("mock_stream ends")
         except Exception:
@@ -367,47 +431,43 @@ additionalProperties: false
         """
         self.mock_stream_task.cancel()
 
-        desired_sampling_frequency = 2 * self.config.max_frequency
+        # The desired frequency at which to acquire data for a channel.
+        desired_scan_frequency = 2 * self.config.max_frequency
 
         # LabJack ljm demo mode does not support streaming,
         # so use mock streaming.
         if self.simulation_mode == 0:
-            actual_sampling_frequency = ljm.eStreamStart(
+            actual_scan_frequency = ljm.eStreamStart(
                 self.handle,
-                self.num_samples,
+                self.accel_array_len,
                 len(self.modbus_addresses),
                 self.modbus_addresses,
-                desired_sampling_frequency,
+                desired_scan_frequency,
             )
-            self.log.info(
-                f"{desired_sampling_frequency=}, {actual_sampling_frequency=}"
-            )
-            # Warn if the LabJack cannot gather data as quickly as requested.
-            # Allow a bit of margin for roundoff error (the log statement
-            # above may help determine a good value for this margin).
-            if actual_sampling_frequency < desired_sampling_frequency * 0.99:
-                actual_max_frequency = actual_sampling_frequency / 2
-                self.log.warning(
-                    "LabJack cannot gather data that quickly; "
-                    f"{self.config.max_frequency=} reduced to {actual_max_frequency}"
-                )
-            self.sampling_interval = 1 / actual_sampling_frequency
             ljm.setStreamCallback(self.handle, self.blocking_data_stream_callback)
         else:
-            actual_sampling_frequency = min(
-                desired_sampling_frequency, MAX_MOCK_SAMPLE_FREQUENCY
+            actual_scan_frequency = min(
+                desired_scan_frequency, MAX_MOCK_READ_FREQUENCY / self.num_channels
             )
-            if desired_sampling_frequency > MAX_MOCK_SAMPLE_FREQUENCY:
-                actual_max_frequency = actual_sampling_frequency / 2
-                self.log.warning(
-                    "Mock LabJack cannot gather data that quickly; "
-                    f"{self.config.max_frequency=} reduced to {actual_max_frequency}"
-                )
-            self.sampling_interval = 1 / actual_sampling_frequency
             self.loop.call_soon_threadsafe(self.start_mock_stream)
 
+        self.sampling_interval = 1 / actual_scan_frequency
+
+        self.log.info(f"{desired_scan_frequency=}, {actual_scan_frequency=}")
+        # Warn if the LabJack cannot gather data as quickly as requested.
+        # Allow a bit of margin for roundoff error (the log statement
+        # above may help determine a good value for this margin).
+        if actual_scan_frequency < desired_scan_frequency * 0.99:
+            actual_psd_max_frequency = actual_scan_frequency / 2
+            self.log.warning(
+                "LabJack cannot gather data that quickly; "
+                f"{self.config.max_frequency=} reduced to {actual_psd_max_frequency}"
+            )
+
         # Compute self.psd_frequencies and self.psd_start_index.
-        self.psd_frequencies = np.fft.rfftfreq(self.num_samples, self.sampling_interval)
+        self.psd_frequencies = np.fft.rfftfreq(
+            self.num_samples_per_psd, self.sampling_interval
+        )
         assert self.psd_frequencies is not None  # make mypy happy
 
         num_frequencies_measured = len(self.psd_frequencies)
@@ -424,7 +484,11 @@ additionalProperties: false
         )
 
     def blocking_data_stream_callback(self, handle: int) -> None:
-        """Called in a thread when a full set of stream data is available."""
+        """Called in a thread when a full set of  stream data is available.
+
+        A full set is self.accel_array_len * self.num_channels values.
+        """
+        end_tai = utils.current_tai()
         try:
             (
                 raw_1d_data,
@@ -433,7 +497,7 @@ additionalProperties: false
             ) = ljm.eStreamRead(self.handle)
             scaled_data = self.scaled_data_from_raw(raw_1d_data)
             self.loop.call_soon_threadsafe(
-                self.start_processing_data, scaled_data, (backlog1, backlog2)
+                self.start_processing_data, scaled_data, end_tai, (backlog1, backlog2)
             )
         except Exception as e:
             self.log.error(f"blocking_data_stream_callback failed: {e!r}")
@@ -467,20 +531,26 @@ additionalProperties: false
     def psd_from_scaled_data(self, scaled_data: np.ndarray) -> np.ndarray:
         """Compute the PSD from scaled data."""
         return (
-            np.abs(np.fft.rfft(scaled_data) * self.sampling_interval / self.num_samples)
+            np.abs(
+                np.fft.rfft(scaled_data)
+                * self.sampling_interval
+                / self.num_samples_per_psd
+            )
             ** 2
         )
 
     def start_processing_data(
-        self, scaled_data: np.ndarray, backlogs: tuple[int, int]
+        self, scaled_data: np.ndarray, end_tai: float, backlogs: tuple[int, int]
     ) -> None:
         """Start process_data as a background task, unless still running.
 
         Parameters
         ----------
         scaled_data : `np.ndarray`
-            x, y, z acceleration data of shape (self.num_channels, n)
-            after applying offset and scale
+            Acceleration data of shape (self.num_channels,
+            self.accel_array_len) after applying offset and scale.
+        end_tai : `float`
+            The time (TAI unix seconds) at which data collection ended.
         backlogs : `tuple`
             Two measures of the number of backlogged messages.
             Both values should be nearly zero if the data client
@@ -491,11 +561,13 @@ additionalProperties: false
                 "An older process_data background task is still running; skipping this data"
             )
         self.process_data_task = asyncio.create_task(
-            self.process_data(scaled_data=scaled_data, backlogs=backlogs)
+            self.process_data(
+                scaled_data=scaled_data, end_tai=end_tai, backlogs=backlogs
+            )
         )
 
     async def process_data(
-        self, scaled_data: np.ndarray, backlogs: tuple[int, int]
+        self, scaled_data: np.ndarray, end_tai: float, backlogs: tuple[int, int]
     ) -> None:
         """Process one set of data.
 
@@ -504,6 +576,8 @@ additionalProperties: false
         scaled_data : `np.ndarray`
             x, y, z acceleration data of shape (self.num_channels, n)
             after applying offset and scale
+        end_tai : `float`
+            The time (TAI unix seconds) at which data collection ended.
         backlogs : `tuple`
             Two measures of the number of backlogged messages.
             Both values should be nearly zero if the data client
@@ -515,70 +589,89 @@ additionalProperties: false
             If streaming has not yet begun (because self.sampling_interval
             is None until streaming begins).
         """
-        if self.psd_start_index is None or self.psd_frequencies is None:
-            raise RuntimeError("Sampling has not yet been configured")
+        if (
+            self.sampling_interval is None
+            or self.psd_start_index is None
+            or self.psd_frequencies is None
+        ):
+            raise RuntimeError("Sampling has not been configured")
 
-        if scaled_data.shape != (self.num_channels, self.num_samples):
+        if scaled_data.shape != (self.num_channels, self.accel_array_len):
             self.log.error(
-                f"Bug: {scaled_data.shape=} != ({self.num_channels}, {self.num_samples}); "
+                f"Bug: {scaled_data.shape=}[0] != ({self.num_channels=}, {self.accel_array_len=}); "
                 "callback ignoring this data"
             )
             return
 
+        start_tai = end_tai - self.acquisition_time(self.accel_array_len)
+
         try:
-            psd = self.psd_from_scaled_data(scaled_data)
-            for i, accelerometer in enumerate(self.accelerometers):
-                channel_start_index = i * NUM_CHANNELS_PER_ACCELEROMETER
+            if self.config.write_acceleration:
+                for accel_index, accelerometer in enumerate(self.accelerometers):
+                    channel_start_index = accel_index * NUM_CHANNELS_PER_ACCELEROMETER
+                    accel_kwargs = {
+                        f"acceleration{axis}": scaled_data[
+                            channel_start_index + channel_offset,
+                        ]
+                        for channel_offset, axis in enumerate(("X", "Y", "Z"))
+                    }
+                    await self.accel_topic.set_write(
+                        sensorName=accelerometer.sensor_name,
+                        timestamp=start_tai,
+                        location=accelerometer.location,
+                        interval=self.sampling_interval,
+                        **accel_kwargs,
+                    )
 
-                if self.config.write_acceleration:
-                    # Write scaled acceleration data. If there is more data
-                    # than fits in the arrays, write the data as multiple
-                    # messages.
-                    accel_data_start_index = 0
-                    done_writing_accel = False
-                    while not done_writing_accel:
-                        num_accel_to_write = self.num_samples - accel_data_start_index
-                        if num_accel_to_write > self.accel_array_len:
-                            num_accel_to_write = self.accel_array_len
-                        else:
-                            done_writing_accel = True
+            num_available = self.num_accumulated + self.accel_array_len
+            num_left_over = max(0, num_available - self.num_samples_per_psd)
+            num_to_append = self.accel_array_len - num_left_over
+            self.accel_accumulator[
+                :, self.num_accumulated : self.num_accumulated + num_to_append
+            ] = scaled_data[:, 0:num_to_append]
+            if self.num_accumulated == 0:
+                self.accel_accumulator_start_tai = start_tai
+            self.num_accumulated += num_to_append
+            if self.num_accumulated < self.num_samples_per_psd:
+                # We need more data before computing the PSD.
+                return
 
-                        accel_kwargs = {
-                            f"acceleration{axis}": scaled_data[
-                                channel_start_index + channel_offset,
-                                accel_data_start_index : accel_data_start_index
-                                + num_accel_to_write,
-                            ]
-                            for channel_offset, axis in enumerate(("X", "Y", "Z"))
-                        }
-                        accel_data_start_index += num_accel_to_write
-                        await self.accel_topic.set_write(
-                            sensorName=accelerometer.sensor_name,
-                            location=accelerometer.location,
-                            interval=self.sampling_interval,
-                            numDataPoints=num_accel_to_write,
-                            **accel_kwargs,
-                        )
+            psd = self.psd_from_scaled_data(self.accel_accumulator)
 
-                # Write PSD data.
-                psd_kwargs = {
-                    f"accelerationPSD{axis}": psd[
-                        channel_start_index + channel_offset, self.psd_start_index :
-                    ]
-                    for channel_offset, axis in enumerate(("X", "Y", "Z"))
-                }
+            # Restart the accumulator; use left-over data if there is any.
+            if num_left_over > 0:
+                self.accel_accumulator[:, 0:num_left_over] = scaled_data[
+                    :, num_to_append:
+                ]
+                self.num_accumulated = num_left_over
+                self.accel_accumulator_start_tai = end_tai - self.acquisition_time(
+                    num_to_append
+                )
+            else:
+                self.num_accumulated = 0
+
+            # Write PSD data.
+            for accel_index, accelerometer in enumerate(self.accelerometers):
+                channel_start_index = accel_index * NUM_CHANNELS_PER_ACCELEROMETER
+                for channel_offset, axis in enumerate(("X", "Y", "Z")):
+                    channel_index = channel_start_index + channel_offset
+                    set_partial_array(
+                        data=self.psd_topic.data,
+                        field_name=f"accelerationPSD{axis}",
+                        values=psd[channel_index, self.psd_start_index :],
+                    )
                 await self.psd_topic.set_write(
                     sensorName=accelerometer.sensor_name,
+                    timestamp=self.accel_accumulator_start_tai,
                     location=accelerometer.location,
                     interval=self.sampling_interval,
                     minPSDFrequency=self.psd_frequencies[self.psd_start_index],
                     maxPSDFrequency=self.psd_frequencies[-1],
                     numDataPoints=self.config.num_frequencies,
-                    **psd_kwargs,
                 )
-            self.wrote_event.set()
-        except Exception:
-            self.log.exception("process_data failed")
+            self.wrote_psd_event.set()
+        except Exception as e:
+            self.log.exception(f"process_data failed: {e!r}")
             raise
 
     def _blocking_connect(self) -> None:

@@ -177,7 +177,9 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
         await asyncio.wait_for(data_client.wrote_event.wait(), timeout=TIMEOUT)
 
         # Some fields of 3 topics should have been written.
-        data = topic_handlers[0].topic.data_dict["labjack_test_1"]
+        data_list = topic_handlers[0].topic.data_dict["labjack_test_1"]
+        assert len(data_list) == 1
+        data = data_list[0]
 
         self.check_topic_handler(
             topic_handler=topic_handlers[0],
@@ -218,13 +220,17 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
             topic_handler=topic_handlers[0],
             raw_data_dict=mock_raw_data_dict,
         )
-        data = topic_handlers[1].topic.data_dict["labjack_test_2"]
+        data_list = topic_handlers[1].topic.data_dict["labjack_test_2"]
+        assert len(data_list) == 1
+        data = data_list[0]
         self.check_data(
             data=data,
             topic_handler=topic_handlers[1],
             raw_data_dict=mock_raw_data_dict,
         )
-        data = topic_handlers[2].topic.data_dict["labjack_test_3"]
+        data_list = topic_handlers[2].topic.data_dict["labjack_test_3"]
+        assert len(data_list) == 1
+        data = data_list[0]
         self.check_data(
             data=data,
             topic_handler=topic_handlers[2],
