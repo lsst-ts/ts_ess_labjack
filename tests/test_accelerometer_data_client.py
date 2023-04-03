@@ -144,15 +144,14 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
             for freq_indices in frequency_indices_per_channel
         ]
         raw_2d_data = np.zeros(
-            shape=(data_client.num_channels, data_client.num_samples_per_psd)
+            shape=(data_client.num_channels, data_client.accel_array_len)
         )
         time_array = np.arange(
             start=0,
-            stop=data_client.sampling_interval
-            * (data_client.num_samples_per_psd - 0.1),
+            stop=data_client.sampling_interval * (data_client.accel_array_len - 0.1),
             step=data_client.sampling_interval,
         )
-        assert len(time_array) == data_client.num_samples_per_psd
+        assert len(time_array) == data_client.accel_array_len
         for channel_index, frequencies in enumerate(axis_frequencies_per_channel):
             arrays = [
                 np.cos(time_array * np.pi * 2 * frequency) for frequency in frequencies
@@ -179,7 +178,7 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
 
         raw_1d_data = np.reshape(
             raw_2d_data,
-            newshape=(data_client.num_channels * data_client.num_samples_per_psd),
+            newshape=(data_client.num_channels * data_client.accel_array_len),
             order="F",
         )
         assert raw_1d_data[0] == raw_2d_data[0, 0]
@@ -244,42 +243,39 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
         start_tai = utils.current_tai()
         data_client = await self.make_data_client(config=config)
 
-        # Wait for two sets of PSD data to be written, then check raw values
+        # Wait for 2 sets of PSD data to be written, then check raw values
         # (the raw data is random noise, so don't bother to check the
         # the computed PSD data; see test_power_spectral_density for that).
-        data_client.wrote_psd_event.clear()
-        await asyncio.wait_for(data_client.wrote_psd_event.wait(), timeout=TIMEOUT)
-        data_client.wrote_psd_event.clear()
-        await asyncio.wait_for(data_client.wrote_psd_event.wait(), timeout=TIMEOUT)
+        for _ in range(2):
+            data_client.wrote_psd_event.clear()
+            await asyncio.wait_for(data_client.wrote_psd_event.wait(), timeout=TIMEOUT)
 
-        assert data_client.sampling_interval == pytest.approx(0.001)
-        assert data_client.accel_array_len == 200
-        assert data_client.psd_array_len == 200
-        assert data_client.num_samples_per_psd == 394
+        assert data_client.sampling_interval == pytest.approx(0.000625)
+        assert data_client.accel_array_len == 400
+        assert data_client.psd_array_len == 201
 
+        # There should be two messages for each of two accelerometers.
+        assert set(data_client.accel_topic.data_dict.keys()) == {"alpha", "beta"}
+        for data_list in data_client.accel_topic.data_dict.values():
+            assert len(data_list) == 2
         assert set(data_client.psd_topic.data_dict.keys()) == {"alpha", "beta"}
+        for data_list in data_client.psd_topic.data_dict.values():
+            assert len(data_list) == 2
         last_psd_timestamps: dict[int, float] = dict()
         for data_list in data_client.psd_topic.data_dict.values():
             assert len(data_list) == 2
             for i, psd_data in enumerate(data_list):
-                assert psd_data.numDataPoints == data_client.config.num_frequencies
-                assert (
-                    data_client.psd_frequencies[-data_client.config.num_frequencies - 1]
-                    <= data_client.config.min_frequency
-                    <= data_client.psd_frequencies[-data_client.config.num_frequencies]
-                )
                 assert psd_data.maxPSDFrequency == pytest.approx(
                     data_client.config.max_frequency
                 )
-                assert len(psd_data.accelerationPSDX) == 200
+                assert len(psd_data.accelerationPSDX) == 201
                 assert psd_data.timestamp > start_tai
                 if i in last_psd_timestamps:
                     assert psd_data.timestamp == last_psd_timestamps[i]
                     # Also make sure time advances by the expected amount.
                     if i > 0:
                         expected_psd_read_interval = (
-                            data_client.sampling_interval
-                            * data_client.num_samples_per_psd
+                            data_client.sampling_interval * data_client.accel_array_len
                         )
 
                         dt = psd_data.timestamp - last_psd_timestamps[i - 1]
@@ -288,16 +284,15 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
                     last_psd_timestamps[i] = psd_data.timestamp
 
         # Check the raw data.
-        assert data_client.accel_array_len == 200
-        assert data_client.psd_array_len == 200
-        assert data_client.num_samples_per_psd == 394
-        start_accel_index = 200
+        assert data_client.accel_array_len == 400
+        assert data_client.psd_array_len == 201
+        start_accel_index = 201
         scaled_data = data_client.scaled_data_from_raw(data_client.mock_raw_1d_data)
         channel_index = 0
         last_accel_timestamps: dict[int, float] = dict()
         for sensor_name, accel_data_list in data_client.accel_topic.data_dict.items():
-            # There should be 4 sets of raw data for each accelerometer
-            assert len(accel_data_list) == 4
+            # There should be 2 sets data for each accelerometer
+            assert len(accel_data_list) == 2
             start_accel_index = 0
             for i, accel_data in enumerate(accel_data_list):
                 assert accel_data.sensorName == sensor_name
@@ -317,7 +312,7 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
                     for axis in ("X", "Y", "Z"):
                         field_name = f"acceleration{axis}"
                         accel_array = getattr(accel_data, field_name)
-                        assert len(accel_array) == 200
+                        assert len(accel_array) == 400
                         assert np.allclose(
                             scaled_data[
                                 channel_index,
@@ -345,19 +340,13 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
         config = self.get_config("good_full_one_accelerometer.yaml")
         data_client = await self.make_data_client(config=config)
 
+        assert data_client.accel_array_len == 400
+        assert data_client.psd_array_len == 201
         # These values are all based on the exact configuration
         # in good_full_one_accelerometer.yaml, which were chosen to give
-        # rounded values for PSD frequencies and an exact match
-        # between one of those frequencies and config.min_frequency.
-        assert data_client.psd_start_index == 4
-        assert data_client.num_samples_per_psd == 200
+        # rounded values for PSD frequencies
         assert np.allclose(
-            data_client.psd_frequencies, np.linspace(start=0, stop=500, num=101)
-        )
-        assert (
-            data_client.psd_frequencies[-data_client.config.num_frequencies - 1]
-            <= data_client.config.min_frequency
-            <= data_client.psd_frequencies[-data_client.config.num_frequencies]
+            data_client.psd_frequencies, np.linspace(start=0, stop=800, num=201)
         )
         assert data_client.config.max_frequency == pytest.approx(
             data_client.psd_frequencies[-1]
@@ -372,45 +361,35 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
             [9, 17],
             [40],
         ]
-        for indices in frequency_indices_per_channel:
-            assert (
-                np.min(indices) >= data_client.psd_start_index
-            ), f"all {indices=} must be ≥ {data_client.psd_start_index=}"
         raw_1d_data, expected_psd_data = self.make_raw_cosines_data_and_expected_psd(
             data_client=data_client,
             frequency_indices_per_channel=frequency_indices_per_channel,
         )
         data_client.mock_raw_1d_data = raw_1d_data
 
-        # Wait for data to be written, then check it.
+        # Wait for 1 set of PSD data to be written, then check it.
         data_client.wrote_psd_event.clear()
         await asyncio.wait_for(data_client.wrote_psd_event.wait(), timeout=TIMEOUT)
 
-        assert not data_client.config.write_acceleration
-        assert data_client.accel_topic.data_dict == {}
-
-        psd_data = data_client.psd_topic.data
+        # There should be one message for one accelerometer.
+        assert data_client.accel_topic.data_dict.keys() == {"alpha"}
+        assert len(data_client.accel_topic.data_dict["alpha"]) == 1
+        assert data_client.psd_topic.data_dict.keys() == {"alpha"}
+        assert len(data_client.psd_topic.data_dict["alpha"]) == 1
+        psd_data = data_client.psd_topic.data_dict["alpha"][0]
         assert psd_data.sensorName == "alpha"
-        assert psd_data.numDataPoints == data_client.config.num_frequencies
-        assert psd_data.minPSDFrequency == pytest.approx(
-            data_client.config.min_frequency
-        )
         assert psd_data.maxPSDFrequency == pytest.approx(
             data_client.config.max_frequency
         )
-        assert len(psd_data.accelerationPSDX) == 200
-        for channel_index, indices in enumerate(frequency_indices_per_channel):
+        assert len(psd_data.accelerationPSDX) == 201
+        for channel_index in range(len(frequency_indices_per_channel)):
             axis = ["X", "Y", "Z"][channel_index]
             field_name = f"accelerationPSD{axis}"
             psd = getattr(psd_data, field_name)
-            assert np.all(np.isnan(psd[psd_data.numDataPoints :]))
             # The factor of 0.25 is observed for a sine wave.
             # It might be related to RMS, but RMS squared is 0.5,
             # so that is not the full story.
-            assert np.allclose(
-                psd[: psd_data.numDataPoints],
-                expected_psd_data[channel_index, data_client.psd_start_index :],
-            )
+            assert np.allclose(psd, expected_psd_data[channel_index, :])
 
         await data_client.stop()
         assert data_client.handle is None
@@ -423,11 +402,10 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
         # Check amplitude of 0 frequency input
         scale = 5.2
         scaled_data = (
-            np.ones((data_client.num_channels, data_client.num_samples_per_psd)) * scale
+            np.ones((data_client.num_channels, data_client.accel_array_len)) * scale
         )
         psd_data = data_client.psd_from_scaled_data(scaled_data)
-        num_frequencies_from_zero = len(data_client.psd_frequencies)
-        ideal_psd = np.zeros((data_client.num_channels, num_frequencies_from_zero))
+        ideal_psd = np.zeros((data_client.num_channels, data_client.psd_array_len))
         ideal_psd[:, 0] = (scale * data_client.sampling_interval) ** 2
         assert np.allclose(psd_data, ideal_psd)
 
