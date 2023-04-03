@@ -6,6 +6,14 @@
 Version History
 ###############
 
+v0.6.6
+------
+
+* `LabJackAccelerometerDataClient`: simplify the configuration and code.
+  This requires ts_xml 16.
+* Use ts_pre_commit_config.
+* ``Jenkinsfile``: use the shared library.
+
 v0.6.5
 ------
 
