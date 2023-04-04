@@ -185,17 +185,14 @@ class MockESSAccelerometerPSDTopic(BaseMockEssTopic):
     """
 
     def __init__(self) -> None:
-        get_zeros = GetListOfZeros(field_len=200)
+        get_zeros = GetListOfZeros(field_len=201)
 
         DataType = dataclasses.make_dataclass(
             cls_name="DataType",
             fields=[
                 ("sensorName", str, dataclasses.field(default="")),  # type: ignore
                 ("timestamp", float, dataclasses.field(default=0)),  # type: ignore
-                ("interval", float, dataclasses.field(default=0)),  # type: ignore
-                ("minPSDFrequency", float, dataclasses.field(default=0)),  # type: ignore
                 ("maxPSDFrequency", float, dataclasses.field(default=0)),  # type: ignore
-                ("numDataPoints", int, dataclasses.field(default=0)),  # type: ignore
             ]
             + [
                 (
@@ -226,7 +223,7 @@ class MockESSAccelerometerTopic(BaseMockEssTopic):
     """
 
     def __init__(self) -> None:
-        get_zeros = GetListOfZeros(field_len=200)
+        get_zeros = GetListOfZeros(field_len=400)
 
         DataType = dataclasses.make_dataclass(
             cls_name="DataType",

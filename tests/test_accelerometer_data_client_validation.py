@@ -60,10 +60,7 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
         # Check against the values in file good_full.yaml.
         assert config.device_type == "T4"
         assert config.connection_type == "USB"
-        assert config.min_frequency == 20
-        assert config.max_frequency == 500
-        assert config.num_frequencies == 190
-        assert config.write_acceleration
+        assert config.max_frequency == 800
         assert config.accelerometers == [
             dict(
                 sensor_name="alpha",
@@ -87,10 +84,7 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
         # Check against the values in file good_minimal.yaml.
         assert config.device_type == "T7"
         assert config.connection_type == "TCP"
-        assert config.min_frequency == 0
         assert config.max_frequency == 1000
-        assert config.num_frequencies == 200
-        assert not config.write_acceleration
         assert config.accelerometers == [
             dict(
                 sensor_name="chaos",
