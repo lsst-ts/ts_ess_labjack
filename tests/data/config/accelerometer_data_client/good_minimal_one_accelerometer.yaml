@@ -1,6 +1,5 @@
 identifier: test.foo.bar
 max_frequency: 1000
-write_acceleration: false
 accelerometers:
   - sensor_name: chaos
     location: auxtel

@@ -25,7 +25,6 @@ import asyncio
 import collections.abc
 import itertools
 import logging
-import math
 import types
 from typing import Any
 
@@ -49,9 +48,6 @@ START_STREAMING_TIMEOUT = 15
 # The max read frequency per channel = MAX_MOCK_READ_FREQUENCY / num channels.
 MAX_MOCK_READ_FREQUENCY = 10000
 
-# Smallest allowed max_frequency / config.min_frequency.
-MIN_FREQUENCY_RATIO = 2
-
 # Number of channels per accelerometer
 # We assume a 3-axis accelerometr: x, y, z
 NUM_CHANNELS_PER_ACCELEROMETER = 3
@@ -60,23 +56,6 @@ NUM_CHANNELS_PER_ACCELEROMETER = 3
 # 5 gives a few unique accelerometer messages to cycle through,
 # without using a crazy amount of memory.
 NUM_RANDOM_ACCEL_ARRAYS = 5
-
-
-def set_partial_array(
-    data: Any, field_name: str, values: collections.abc.Collection[float]
-) -> None:
-    """Set an array field in a struct with a set of values that may be shorter.
-
-    Pad with NaN.
-    """
-    field_arr = getattr(data, field_name)
-    field_len = len(field_arr)
-    num_values = len(values)
-    num_nans = field_len - num_values
-    if num_nans < 0:
-        raise ValueError(f"{field_name} len={field_len} < num values={num_values}")
-    field_arr[:num_values] = values
-    field_arr[num_values:] = [math.nan] * num_nans
 
 
 class LabJackAccelerometerDataClient(BaseLabJackDataClient):
@@ -99,19 +78,20 @@ class LabJackAccelerometerDataClient(BaseLabJackDataClient):
 
     Attributes
     ----------
+    accel_array_len : `int`
+        The number of raw samples in each accelerometer telemetry array.
     accelerometers : `list` [`types.SimpleNamespace`]
         List of configuration for each accelerometer.
+    acquisition_time : `float` | `None`
+        How long it takes to acquire one set of raw data samples*:
+        sampling_interval * (accel_array_len - 1)
     num_channels : `int`
         Number of accelerometer channels to read (3 per accelerometer).
-    num_samples_per_psd : `int`
-        The number of acceleration samples used to compute the PSD
-        for one channel.
+    psd_array_len : `int`
+        The number of samples in each accelerometerPSD telemetry array.
     psd_frequencies : `np.ndarray`
         Array of frequences for the computed PSD, starting from 0.
-    psd_start_index : `int`
-        Index of first PSD value to report (>0 if the minimum frequency
-        is greater than 0)*.
-    sampling_interval : `float`
+    sampling_interval : `float` | `None`
         Interval between samples for one channel (seconds)*.
     offsets : `ndarray`
         Offset for each accelerometer channel.
@@ -166,11 +146,10 @@ class LabJackAccelerometerDataClient(BaseLabJackDataClient):
         # Length of the array fields in the accelerometerPSD topic.
         self.psd_array_len = len(self.psd_topic.DataType().accelerationPSDX)
 
-        if config.min_frequency * MIN_FREQUENCY_RATIO > config.max_frequency:
-            raise ValueError(
-                f"{self.config.min_frequency=} must be < "
-                f"{config.max_frequency=} / {MIN_FREQUENCY_RATIO=} "
-                f"= {config.max_frequency / MIN_FREQUENCY_RATIO}"
+        if self.accel_array_len != 2 * self.psd_array_len - 2:
+            raise RuntimeError(
+                f"num accel points = {self.accel_array_len} != "
+                f"num PSD points = {self.psd_array_len} * 2 - 2"
             )
 
         self.accelerometers = [
@@ -182,28 +161,10 @@ class LabJackAccelerometerDataClient(BaseLabJackDataClient):
             self.config.accelerometers
         )
 
-        num_frequencies_from_0 = round(
-            config.num_frequencies
-            * config.max_frequency
-            / (config.max_frequency - config.min_frequency)
-        )
-        self.num_samples_per_psd = num_frequencies_from_0 * 2 - 2
-
         self.psd_frequencies: np.ndarray | None = None
 
-        self.psd_start_index: int | None = None
-
         self.sampling_interval: float | None = None
-
-        # Buffer for scaled acceleration data that holds just enough data
-        # to compute one PSD.
-        self.accel_accumulator = np.zeros(
-            shape=(self.num_channels, self.num_samples_per_psd)
-        )
-        # The number of entries accumulated (per channel).
-        self.num_accumulated = 0
-        # The TAI date at which accumulation started.
-        self.accel_accumulator_start_tai = 0.0
+        self.acquisition_time: float | None = None
 
         # Set modbus address, {offset}, and scale for every
         # LabJack analog input channel to read, in order:
@@ -238,7 +199,7 @@ class LabJackAccelerometerDataClient(BaseLabJackDataClient):
     @classmethod
     def get_config_schema(cls) -> dict[str, Any]:
         return yaml.safe_load(
-            f"""
+            """
 $schema: http://json-schema.org/draft-07/schema#
 description: Schema for LabJackAccelerometerDataClient
 type: object
@@ -258,31 +219,12 @@ properties:
         * A serial number if connection_type = USB
         * For testing in an environment with only one LabJack you may use ANY
     type: string
-  min_frequency:
-    description: >-
-        Approximate minimum frequency to report in the PSD (Hz).
-        A value larger than 0 may be used to increase the resolution
-        of the reported PSD.
-        Must be ≤ max_frequency / {MIN_FREQUENCY_RATIO=}.
-    type: number
-    default: 0
-    minimum: 0
   max_frequency:
     description: >-
         Maximum frequency to report in the PSD (Hz).
         If larger than the LabJack can handle then it is reduced.
     type: number
     minimum: 0
-  num_frequencies:
-    description: >-
-        Number of frequencies to report in the PSD.
-        Must be less than or equal to the length of the PSD array fields.
-    type: integer
-    minValue: 10
-    default: 200
-  write_acceleration:
-    description: Write the acceleration telemetry topic (calibrated input data)?
-    type: boolean
   accelerometers:
     description: >-
       Configuration for each 3-axis accelerometer.
@@ -338,20 +280,11 @@ required:
   - device_type
   - connection_type
   - identifier
-  - min_frequency
   - max_frequency
-  - num_frequencies
-  - write_acceleration
   - accelerometers
 additionalProperties: false
 """
         )
-
-    def acquisition_time(self, num_samples: int) -> float:
-        """Compute how long it takes to acquire a given # of samples."""
-        if self.sampling_interval is None:
-            raise RuntimeError("Sampling has not been configured")
-        return self.sampling_interval * (num_samples - 1)
 
     def descr(self) -> str:
         return f"identifier={self.config.identifier}"
@@ -394,10 +327,10 @@ additionalProperties: false
         """
         self.log.info("mock_stream begins")
         try:
-            if self.sampling_interval is None:
+            if self.acquisition_time is None:
                 raise RuntimeError("Sampling has not been configured.")
 
-            sleep_interval = self.acquisition_time(self.accel_array_len)
+            sleep_interval = self.acquisition_time
             mock_raw_iter: collections.abc.Iterator[float] | None = None
             num_raw_samples = (
                 NUM_RANDOM_ACCEL_ARRAYS * self.accel_array_len * self.num_channels
@@ -451,7 +384,13 @@ additionalProperties: false
             )
             self.loop.call_soon_threadsafe(self.start_mock_stream)
 
+        # Do not await until self.sampling_interval, self.acquisition_time,
+        # and self.psd_frequencies have all been computed.
+        # The background task started just above needs them.
+
         self.sampling_interval = 1 / actual_scan_frequency
+        assert self.sampling_interval is not None  # mypy idiocy
+        self.acquisition_time = self.sampling_interval * (self.accel_array_len - 1)
 
         self.log.info(f"{desired_scan_frequency=}, {actual_scan_frequency=}")
         # Warn if the LabJack cannot gather data as quickly as requested.
@@ -464,24 +403,14 @@ additionalProperties: false
                 f"{self.config.max_frequency=} reduced to {actual_psd_max_frequency}"
             )
 
-        # Compute self.psd_frequencies and self.psd_start_index.
+        # Compute self.psd_frequencies
         self.psd_frequencies = np.fft.rfftfreq(
-            self.num_samples_per_psd, self.sampling_interval
+            self.accel_array_len, self.sampling_interval
         )
         assert self.psd_frequencies is not None  # make mypy happy
+        assert len(self.psd_frequencies) == self.psd_array_len
 
-        num_frequencies_measured = len(self.psd_frequencies)
-        if num_frequencies_measured < self.config.num_frequencies:
-            self.log.warning(
-                f"Bug! {self.config.num_frequencies=} too large; reduced to {num_frequencies_measured}"
-            )
-            self.config.num_frequencies = num_frequencies_measured
-        self.psd_start_index = num_frequencies_measured - self.config.num_frequencies
-
-        self.log.info(
-            f"actual min_frequency={self.psd_frequencies[self.psd_start_index]:0.2f}, "
-            f"max_frequency={self.psd_frequencies[-1]:0.2f}"
-        )
+        self.log.info(f"actual max_frequency={self.psd_frequencies[-1]:0.2f}")
 
     def blocking_data_stream_callback(self, handle: int) -> None:
         """Called in a thread when a full set of  stream data is available.
@@ -532,9 +461,7 @@ additionalProperties: false
         """Compute the PSD from scaled data."""
         return (
             np.abs(
-                np.fft.rfft(scaled_data)
-                * self.sampling_interval
-                / self.num_samples_per_psd
+                np.fft.rfft(scaled_data) * self.sampling_interval / self.accel_array_len
             )
             ** 2
         )
@@ -591,7 +518,7 @@ additionalProperties: false
         """
         if (
             self.sampling_interval is None
-            or self.psd_start_index is None
+            or self.acquisition_time is None
             or self.psd_frequencies is None
         ):
             raise RuntimeError("Sampling has not been configured")
@@ -603,71 +530,40 @@ additionalProperties: false
             )
             return
 
-        start_tai = end_tai - self.acquisition_time(self.accel_array_len)
+        start_tai = end_tai - self.acquisition_time
 
         try:
-            if self.config.write_acceleration:
-                for accel_index, accelerometer in enumerate(self.accelerometers):
-                    channel_start_index = accel_index * NUM_CHANNELS_PER_ACCELEROMETER
-                    accel_kwargs = {
-                        f"acceleration{axis}": scaled_data[
-                            channel_start_index + channel_offset,
-                        ]
-                        for channel_offset, axis in enumerate(("X", "Y", "Z"))
-                    }
-                    await self.accel_topic.set_write(
-                        sensorName=accelerometer.sensor_name,
-                        timestamp=start_tai,
-                        location=accelerometer.location,
-                        interval=self.sampling_interval,
-                        **accel_kwargs,
-                    )
-
-            num_available = self.num_accumulated + self.accel_array_len
-            num_left_over = max(0, num_available - self.num_samples_per_psd)
-            num_to_append = self.accel_array_len - num_left_over
-            self.accel_accumulator[
-                :, self.num_accumulated : self.num_accumulated + num_to_append
-            ] = scaled_data[:, 0:num_to_append]
-            if self.num_accumulated == 0:
-                self.accel_accumulator_start_tai = start_tai
-            self.num_accumulated += num_to_append
-            if self.num_accumulated < self.num_samples_per_psd:
-                # We need more data before computing the PSD.
-                return
-
-            psd = self.psd_from_scaled_data(self.accel_accumulator)
-
-            # Restart the accumulator; use left-over data if there is any.
-            if num_left_over > 0:
-                self.accel_accumulator[:, 0:num_left_over] = scaled_data[
-                    :, num_to_append:
-                ]
-                self.num_accumulated = num_left_over
-                self.accel_accumulator_start_tai = end_tai - self.acquisition_time(
-                    num_to_append
-                )
-            else:
-                self.num_accumulated = 0
-
-            # Write PSD data.
             for accel_index, accelerometer in enumerate(self.accelerometers):
                 channel_start_index = accel_index * NUM_CHANNELS_PER_ACCELEROMETER
-                for channel_offset, axis in enumerate(("X", "Y", "Z")):
-                    channel_index = channel_start_index + channel_offset
-                    set_partial_array(
-                        data=self.psd_topic.data,
-                        field_name=f"accelerationPSD{axis}",
-                        values=psd[channel_index, self.psd_start_index :],
-                    )
-                await self.psd_topic.set_write(
+                accel_kwargs = {
+                    f"acceleration{axis}": scaled_data[
+                        channel_start_index + channel_offset, :
+                    ]
+                    for channel_offset, axis in enumerate(("X", "Y", "Z"))
+                }
+                await self.accel_topic.set_write(
                     sensorName=accelerometer.sensor_name,
-                    timestamp=self.accel_accumulator_start_tai,
+                    timestamp=start_tai,
                     location=accelerometer.location,
                     interval=self.sampling_interval,
-                    minPSDFrequency=self.psd_frequencies[self.psd_start_index],
+                    **accel_kwargs,
+                )
+
+            psd = self.psd_from_scaled_data(scaled_data=scaled_data)
+            for accel_index, accelerometer in enumerate(self.accelerometers):
+                channel_start_index = accel_index * NUM_CHANNELS_PER_ACCELEROMETER
+                psd_kwargs = {
+                    f"accelerationPSD{axis}": psd[
+                        channel_start_index + channel_offset, :
+                    ]
+                    for channel_offset, axis in enumerate(("X", "Y", "Z"))
+                }
+                await self.psd_topic.set_write(
+                    sensorName=accelerometer.sensor_name,
+                    timestamp=start_tai,
+                    location=accelerometer.location,
                     maxPSDFrequency=self.psd_frequencies[-1],
-                    numDataPoints=self.config.num_frequencies,
+                    **psd_kwargs,
                 )
             self.wrote_psd_event.set()
         except Exception as e:
