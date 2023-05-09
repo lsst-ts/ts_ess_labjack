@@ -20,9 +20,8 @@ test:
   source_files:
     - python
     - tests
-    - setup.cfg
   commands:
-    - py.test
+    - pytest
 
 requirements:
   host:
