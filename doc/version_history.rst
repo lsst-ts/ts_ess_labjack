@@ -6,6 +6,17 @@
 Version History
 ###############
 
+v0.6.7
+------
+
+* Remove scons support.
+* Git hide egg info and simplify .gitignore.
+* Further refinements for ts_pre_commit_config:
+
+  * Stop running pytest linters in ``pyproject.toml``.
+  * Remove unused bits from ``conda/meta.yaml``.
+  * Remove ``setup.cfg``.
+
 v0.6.6
 ------
 
