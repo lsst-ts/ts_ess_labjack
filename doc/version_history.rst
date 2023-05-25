@@ -6,6 +6,11 @@
 Version History
 ###############
 
+v0.7.0
+------
+
+* Update for ts_ess_common v0.17, which is required.
+
 v0.6.7
 ------
 

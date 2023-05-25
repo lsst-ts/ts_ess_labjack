@@ -30,7 +30,8 @@ import numpy as np
 import pytest
 import yaml
 from lsst.ts import salobj, utils
-from lsst.ts.ess import common, labjack
+from lsst.ts.ess import labjack
+from lsst.ts.ess.common.data_client import get_data_client_class
 
 logging.basicConfig(
     format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG
@@ -427,7 +428,5 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
         assert np.allclose(psd_data, expected_psd_data)
 
     async def test_registry(self) -> None:
-        data_client_class = common.get_data_client_class(
-            "LabJackAccelerometerDataClient"
-        )
+        data_client_class = get_data_client_class("LabJackAccelerometerDataClient")
         assert data_client_class is labjack.LabJackAccelerometerDataClient

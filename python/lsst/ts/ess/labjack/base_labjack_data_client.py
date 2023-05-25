@@ -32,7 +32,7 @@ from typing import Any
 # Hide mypy error `Module "labjack" has no attribute "ljm"`.
 from labjack import ljm  # type: ignore
 from lsst.ts import salobj
-from lsst.ts.ess import common
+from lsst.ts.ess.common.data_client import BaseDataClient
 
 # Time limit for connecting to the LabJack (seconds).
 CONNECT_TIMEOUT = 5
@@ -41,8 +41,8 @@ CONNECT_TIMEOUT = 5
 MOCK_IDENTIFIER = "LJM_DEMO_MODE"
 
 
-class BaseLabJackDataClient(common.BaseDataClient):
-    """Base class for ESS data clients that read a LabJack T7 or similar.
+class BaseLabJackDataClient(BaseDataClient):
+    """Base class for ESS data clients that read a LabJack T4 or T7.
 
     Parameters
     ----------
