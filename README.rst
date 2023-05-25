@@ -1,7 +1,9 @@
-##########
+##############
 ts_ess_labjack
-##########
+##############
 
-``ts_ess_labjack`` provides data clients for the ESS CSC, to communicate with LabJack T4 or T7 modules that read environmental sensors.
+``ts_ess_labjack`` provides ESS data clients that communicate with LabJack modules that read environmental sensors.
+
+It is a separate package from `ts_ess_common` because it requires the LabJack LJM library, which is somewhat difficult to install.
 
 `Documentation <https://ts-ess-labjack.lsst.io>`_
