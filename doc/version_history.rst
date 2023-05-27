@@ -6,10 +6,10 @@
 Version History
 ###############
 
-v0.7.0
+v0.6.8
 ------
 
-* Update for ts_ess_common v0.17, which is required.
+* Simplify the README.
 
 v0.6.7
 ------
