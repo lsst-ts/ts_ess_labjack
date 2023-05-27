@@ -31,8 +31,7 @@ import numpy as np
 import pytest
 import yaml
 from lsst.ts import salobj
-from lsst.ts.ess import labjack
-from lsst.ts.ess.common.data_client import get_data_client_class
+from lsst.ts.ess import common, labjack
 
 logging.basicConfig(
     format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG
@@ -243,7 +242,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
         assert data_client.run_task.done()
 
     async def test_registry(self) -> None:
-        data_client_class = get_data_client_class("LabJackDataClient")
+        data_client_class = common.get_data_client_class("LabJackDataClient")
         assert data_client_class is labjack.LabJackDataClient
 
     def check_data(
