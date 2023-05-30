@@ -6,6 +6,11 @@
 Version History
 ###############
 
+v0.6.8
+------
+
+* Simplify the README.
+
 v0.6.7
 ------
 
