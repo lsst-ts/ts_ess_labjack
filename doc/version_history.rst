@@ -6,6 +6,13 @@
 Version History
 ###############
 
+v1.0.0
+------
+
+* Use mock ESS topics from ts_salobj.
+  This requires ts_salobj 7.5.
+* Delete the local mock topics.
+
 v0.6.8
 ------
 
