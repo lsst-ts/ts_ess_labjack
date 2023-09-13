@@ -84,7 +84,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
             topic_handlers = list(data_client.topic_handlers.values())
             assert topic_handlers[0].topic.attr_name == "tel_temperature"
             assert topic_handlers[0].sensor_name == "labjack_test_1"
-            assert topic_handlers[0].field_name == "temperature"
+            assert topic_handlers[0].field_name == "temperatureItem"
             assert (
                 topic_handlers[0].location
                 == "somewhere, nowhere, somewhere else, guess"
@@ -96,7 +96,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
 
             assert topic_handlers[1].topic.attr_name == "tel_pressure"
             assert topic_handlers[1].sensor_name == "labjack_test_2"
-            assert topic_handlers[1].field_name == "pressure"
+            assert topic_handlers[1].field_name == "pressureItem"
             assert topic_handlers[1].location == "top of stack, bottom of stack"
             assert topic_handlers[1].offset == 0
             assert topic_handlers[1].scale == 1
@@ -105,7 +105,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
 
             assert topic_handlers[2].topic.attr_name == "tel_temperature"
             assert topic_handlers[2].sensor_name == "labjack_test_3"
-            assert topic_handlers[2].field_name == "temperature"
+            assert topic_handlers[2].field_name == "temperatureItem"
             assert topic_handlers[2].location == "none, here"
             assert topic_handlers[2].offset == 0
             assert topic_handlers[2].scale == 1
@@ -131,7 +131,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
             topic_handlers = list(data_client.topic_handlers.values())
             assert topic_handlers[0].topic.attr_name == "tel_temperature"
             assert topic_handlers[0].sensor_name == "labjack_test_1"
-            assert topic_handlers[0].field_name == "temperature"
+            assert topic_handlers[0].field_name == "temperatureItem"
             assert topic_handlers[0].location == "none, here"
             assert topic_handlers[0].offset == 0
             assert topic_handlers[0].scale == 1
@@ -205,7 +205,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
                 topic_handler=topic_handlers[0],
                 topic_name="tel_temperature",
                 sensor_name="labjack_test_1",
-                field_name="temperature",
+                field_name="temperatureItem",
                 location="somewhere, nowhere, somewhere else, guess",
                 offset=1.5,
                 scale=-2.1,
@@ -216,7 +216,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
                 topic_name="tel_pressure",
                 topic_handler=topic_handlers[1],
                 sensor_name="labjack_test_2",
-                field_name="pressure",
+                field_name="pressureItem",
                 location="top of stack, bottom of stack",
                 offset=0,
                 scale=1,
@@ -227,7 +227,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
                 topic_name="tel_temperature",
                 topic_handler=topic_handlers[2],
                 sensor_name="labjack_test_3",
-                field_name="temperature",
+                field_name="temperatureItem",
                 location="none, here",
                 offset=0,
                 scale=1,
