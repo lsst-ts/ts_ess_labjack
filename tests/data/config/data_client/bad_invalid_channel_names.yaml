@@ -1,8 +1,8 @@
 identifier: test.foo.bar
-topics: 
+topics:
   - topic_name: tel_temperature
     sensor_name: labjack_test_1
-    field_name: temperature
+    field_name: temperatureItem
     location: none, here
     # Channel names must all be strings.
     channel_names: ["AIN0", 1]

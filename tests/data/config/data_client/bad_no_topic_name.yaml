@@ -1,6 +1,6 @@
 identifier: test.foo.bar
-topics: 
+topics:
   - sensor_name: labjack_test_1
-    field_name: temperature
+    field_name: temperatureItem
     location: none, here
     channel_names: ["", "AIN2"]
