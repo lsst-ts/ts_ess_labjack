@@ -65,7 +65,7 @@ class TopicHandler:
     These inputs:
 
     * sensor_name = "topic_handler_example"
-    * field_name = "temperature"  # the only array field in this topic
+    * field_name = "temperatureItem"  # the only array field in this topic
     * location = "north, not used, west"
     * channel_names = ["AIN2", None, "AIN0"]
 

@@ -60,7 +60,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
         topics = [types.SimpleNamespace(**topic_dict) for topic_dict in config.topics]
         assert topics[0].topic_name == "tel_temperature"
         assert topics[0].sensor_name == "labjack_test_1"
-        assert topics[0].field_name == "temperature"
+        assert topics[0].field_name == "temperatureItem"
         assert topics[0].location == "somewhere, nowhere, somewhere else, guess"
         assert topics[0].channel_names == ["AIN0", "", "AIN3", "AIN2"]
         assert topics[0].offset == 1.5
@@ -68,7 +68,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
 
         assert topics[1].topic_name == "tel_pressure"
         assert topics[1].sensor_name == "labjack_test_2"
-        assert topics[1].field_name == "pressure"
+        assert topics[1].field_name == "pressureItem"
         assert topics[1].location == "top of stack, bottom of stack"
         assert topics[1].channel_names == ["AIN4", "AIN5"]
         assert topics[1].offset == 0
@@ -76,7 +76,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
 
         assert topics[2].topic_name == "tel_temperature"
         assert topics[2].sensor_name == "labjack_test_3"
-        assert topics[2].field_name == "temperature"
+        assert topics[2].field_name == "temperatureItem"
         assert topics[2].location == "none, here"
         assert topics[2].channel_names == ["", "AIN6"]
         assert topics[2].offset == 0
@@ -93,7 +93,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
         topics = [types.SimpleNamespace(**topic_dict) for topic_dict in config.topics]
         assert topics[0].topic_name == "tel_temperature"
         assert topics[0].sensor_name == "labjack_test_1"
-        assert topics[0].field_name == "temperature"
+        assert topics[0].field_name == "temperatureItem"
         assert topics[0].location == "none, here"
         assert topics[0].channel_names == ["", "AIN2"]
         assert topics[0].offset == 0

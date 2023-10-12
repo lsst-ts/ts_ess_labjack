@@ -6,6 +6,18 @@
 Version History
 ###############
 
+v1.0.1
+------
+
+* Rename telemetry items for which the topic has the same name.
+
+v1.0.0
+------
+
+* Use mock ESS topics from ts_salobj.
+  This requires ts_salobj 7.5.
+* Delete the local mock topics.
+
 v0.6.8
 ------
 
@@ -71,7 +83,7 @@ v0.6.0
 * `LabJackDataClient`: change definition of offset parameter to match `LabJackAccelerometerDataClient`.
   Now published data = (raw data - offset) * scale.
   This change will not affect existing use of this data client (as configured in ts_config_ocs), because that has offset=0.
-  
+
 * Improve mock ESS topics:
 
     * Add `BaseMockEssTopic`, and refactor the other topics to use it.

@@ -20,11 +20,13 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import asyncio
+import contextlib
 import logging
 import math
 import pathlib
 import types
 import unittest
+from collections.abc import AsyncGenerator
 from typing import Any, TypeAlias
 
 import numpy as np
@@ -44,7 +46,7 @@ TIMEOUT = 5
 
 
 class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
-    async def asyncSetUp(self) -> None:
+    def setUp(self) -> None:
         self.log = logging.getLogger()
         self.data_dir = (
             pathlib.Path(__file__).parent / "data" / "config" / "data_client"
@@ -53,193 +55,201 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
         config_schema = labjack.LabJackDataClient.get_config_schema()
         self.validator = salobj.DefaultingValidator(config_schema)
 
-        # Mock topics listed in the config files in tests/data.
-        # These happen to match real array-valued ESS telemetry topics,
-        # though that doesn't matter for these tests.
-        mock_topics = [
-            labjack.MockEssArrayTopic(
-                attr_name="tel_temperature", field_name="temperature", field_len=16
-            ),
-            labjack.MockEssArrayTopic(
-                attr_name="tel_pressure", field_name="pressure", field_len=8
-            ),
-        ]
-        topics_kwargs = {topic.attr_name: topic for topic in mock_topics}
-        self.topics = types.SimpleNamespace(**topics_kwargs)
+    @contextlib.asynccontextmanager
+    async def make_topics(self) -> AsyncGenerator[types.SimpleNamespace, None]:
+        salobj.set_random_lsst_dds_partition_prefix()
+        async with salobj.make_mock_write_topics(
+            name="ESS", attr_names=["tel_temperature", "tel_pressure"]
+        ) as topics:
+            yield topics
 
     async def test_constructor_good_full(self) -> None:
         """Construct with good_full.yaml and compare values to that file.
 
         Use the default simulation_mode.
         """
-        config = self.get_config("good_full.yaml")
-        data_client = labjack.LabJackDataClient(
-            config=config,
-            topics=self.topics,
-            log=self.log,
-        )
-        assert data_client.simulation_mode == 0
-        assert isinstance(data_client.log, logging.Logger)
-        assert set(data_client.channel_names) == {f"AIN{i}" for i in (0, 2, 3, 4, 5, 6)}
-        assert len(data_client.topic_handlers) == 3
-        topic_handlers = list(data_client.topic_handlers.values())
-        assert topic_handlers[0].topic.attr_name == "tel_temperature"
-        assert topic_handlers[0].sensor_name == "labjack_test_1"
-        assert topic_handlers[0].field_name == "temperature"
-        assert topic_handlers[0].location == "somewhere, nowhere, somewhere else, guess"
-        assert topic_handlers[0].offset == 1.5
-        assert topic_handlers[0].scale == -2.1
-        assert topic_handlers[0].num_channels == 4
-        assert topic_handlers[0].channel_dict == {0: "AIN0", 2: "AIN3", 3: "AIN2"}
+        async with self.make_topics() as topics:
+            config = self.get_config("good_full.yaml")
+            data_client = labjack.LabJackDataClient(
+                config=config,
+                topics=topics,
+                log=self.log,
+            )
+            assert data_client.simulation_mode == 0
+            assert isinstance(data_client.log, logging.Logger)
+            assert set(data_client.channel_names) == {
+                f"AIN{i}" for i in (0, 2, 3, 4, 5, 6)
+            }
+            assert len(data_client.topic_handlers) == 3
+            topic_handlers = list(data_client.topic_handlers.values())
+            assert topic_handlers[0].topic.attr_name == "tel_temperature"
+            assert topic_handlers[0].sensor_name == "labjack_test_1"
+            assert topic_handlers[0].field_name == "temperatureItem"
+            assert (
+                topic_handlers[0].location
+                == "somewhere, nowhere, somewhere else, guess"
+            )
+            assert topic_handlers[0].offset == 1.5
+            assert topic_handlers[0].scale == -2.1
+            assert topic_handlers[0].num_channels == 4
+            assert topic_handlers[0].channel_dict == {0: "AIN0", 2: "AIN3", 3: "AIN2"}
 
-        assert topic_handlers[1].topic.attr_name == "tel_pressure"
-        assert topic_handlers[1].sensor_name == "labjack_test_2"
-        assert topic_handlers[1].field_name == "pressure"
-        assert topic_handlers[1].location == "top of stack, bottom of stack"
-        assert topic_handlers[1].offset == 0
-        assert topic_handlers[1].scale == 1
-        assert topic_handlers[1].num_channels == 2
-        assert topic_handlers[1].channel_dict == {0: "AIN4", 1: "AIN5"}
+            assert topic_handlers[1].topic.attr_name == "tel_pressure"
+            assert topic_handlers[1].sensor_name == "labjack_test_2"
+            assert topic_handlers[1].field_name == "pressureItem"
+            assert topic_handlers[1].location == "top of stack, bottom of stack"
+            assert topic_handlers[1].offset == 0
+            assert topic_handlers[1].scale == 1
+            assert topic_handlers[1].num_channels == 2
+            assert topic_handlers[1].channel_dict == {0: "AIN4", 1: "AIN5"}
 
-        assert topic_handlers[2].topic.attr_name == "tel_temperature"
-        assert topic_handlers[2].sensor_name == "labjack_test_3"
-        assert topic_handlers[2].field_name == "temperature"
-        assert topic_handlers[2].location == "none, here"
-        assert topic_handlers[2].offset == 0
-        assert topic_handlers[2].scale == 1
-        assert topic_handlers[2].num_channels == 2
-        assert topic_handlers[2].channel_dict == {1: "AIN6"}
+            assert topic_handlers[2].topic.attr_name == "tel_temperature"
+            assert topic_handlers[2].sensor_name == "labjack_test_3"
+            assert topic_handlers[2].field_name == "temperatureItem"
+            assert topic_handlers[2].location == "none, here"
+            assert topic_handlers[2].offset == 0
+            assert topic_handlers[2].scale == 1
+            assert topic_handlers[2].num_channels == 2
+            assert topic_handlers[2].channel_dict == {1: "AIN6"}
 
     async def test_constructor_good_minimal(self) -> None:
         """Construct with good_minimal.yaml and compare values to that file.
 
         Use the default simulation_mode.
         """
-        config = self.get_config("good_minimal.yaml")
-        data_client = labjack.LabJackDataClient(
-            config=config,
-            topics=self.topics,
-            log=self.log,
-        )
-        assert data_client.simulation_mode == 0
-        assert isinstance(data_client.log, logging.Logger)
-        assert set(data_client.channel_names) == {"AIN2"}
-        assert len(data_client.topic_handlers) == 1
-        topic_handlers = list(data_client.topic_handlers.values())
-        assert topic_handlers[0].topic.attr_name == "tel_temperature"
-        assert topic_handlers[0].sensor_name == "labjack_test_1"
-        assert topic_handlers[0].field_name == "temperature"
-        assert topic_handlers[0].location == "none, here"
-        assert topic_handlers[0].offset == 0
-        assert topic_handlers[0].scale == 1
-        assert topic_handlers[0].num_channels == 2
-        assert topic_handlers[0].channel_dict == {1: "AIN2"}
-
-    async def test_constructor_specify_simulation_mode(self) -> None:
-        config = self.get_config("good_minimal.yaml")
-        for simulation_mode in (0, 1):
+        async with self.make_topics() as topics:
+            config = self.get_config("good_minimal.yaml")
             data_client = labjack.LabJackDataClient(
                 config=config,
-                topics=self.topics,
+                topics=topics,
                 log=self.log,
-                simulation_mode=simulation_mode,
             )
-            assert data_client.simulation_mode == simulation_mode
+            assert data_client.simulation_mode == 0
+            assert isinstance(data_client.log, logging.Logger)
+            assert set(data_client.channel_names) == {"AIN2"}
+            assert len(data_client.topic_handlers) == 1
+            topic_handlers = list(data_client.topic_handlers.values())
+            assert topic_handlers[0].topic.attr_name == "tel_temperature"
+            assert topic_handlers[0].sensor_name == "labjack_test_1"
+            assert topic_handlers[0].field_name == "temperatureItem"
+            assert topic_handlers[0].location == "none, here"
+            assert topic_handlers[0].offset == 0
+            assert topic_handlers[0].scale == 1
+            assert topic_handlers[0].num_channels == 2
+            assert topic_handlers[0].channel_dict == {1: "AIN2"}
+
+    async def test_constructor_specify_simulation_mode(self) -> None:
+        async with self.make_topics() as topics:
+            config = self.get_config("good_minimal.yaml")
+            for simulation_mode in (0, 1):
+                data_client = labjack.LabJackDataClient(
+                    config=config,
+                    topics=topics,
+                    log=self.log,
+                    simulation_mode=simulation_mode,
+                )
+                assert data_client.simulation_mode == simulation_mode
 
     async def test_operation(self) -> None:
-        config = self.get_config("good_full.yaml")
-        data_client = labjack.LabJackDataClient(
-            config=config, topics=self.topics, log=self.log, simulation_mode=1
-        )
-        assert len(data_client.topic_handlers) == 3
-        topic_handlers = list(data_client.topic_handlers.values())
-        assert data_client.handle is None
-        assert data_client.run_task.done()
-
-        num_channels = 0
-        for topic_handler in topic_handlers:
-            num_channels += len(topic_handler.channel_dict)
-        assert num_channels == 6
-        data_client.mock_raw_data = np.random.random(num_channels)
-        mock_raw_data_dict = {
-            channel_name: value
-            for channel_name, value in zip(
-                data_client.channel_names, data_client.mock_raw_data
+        async with self.make_topics() as topics:
+            config = self.get_config("good_full.yaml")
+            data_client = labjack.LabJackDataClient(
+                config=config, topics=topics, log=self.log, simulation_mode=1
             )
-        }
+            assert len(data_client.topic_handlers) == 3
+            topic_handlers = list(data_client.topic_handlers.values())
+            assert data_client.handle is None
+            assert data_client.run_task.done()
 
-        await data_client.start()
-        assert data_client.handle is not None
-        assert not data_client.run_task.done()
+            num_channels = 0
+            for topic_handler in topic_handlers:
+                num_channels += len(topic_handler.channel_dict)
+            assert num_channels == 6
+            data_client.mock_raw_data = np.random.random(num_channels)
+            mock_raw_data_dict = {
+                channel_name: value
+                for channel_name, value in zip(
+                    data_client.channel_names, data_client.mock_raw_data
+                )
+            }
 
-        # Wait for data to be written, then check it.
-        data_client.wrote_event.clear()
-        await asyncio.wait_for(data_client.wrote_event.wait(), timeout=TIMEOUT)
+            await data_client.start()
+            assert data_client.handle is not None
+            assert not data_client.run_task.done()
 
-        # Some fields of 3 topics should have been written.
-        data_list = topic_handlers[0].topic.data_dict["labjack_test_1"]
-        assert len(data_list) == 1
-        data = data_list[0]
+            # Wait for data to be written, then check it.
+            data_client.wrote_event.clear()
+            await asyncio.wait_for(data_client.wrote_event.wait(), timeout=TIMEOUT)
+            await data_client.stop()
+            assert data_client.handle is None
+            assert data_client.run_task.done()
 
-        self.check_topic_handler(
-            topic_handler=topic_handlers[0],
-            topic_name="tel_temperature",
-            sensor_name="labjack_test_1",
-            field_name="temperature",
-            location="somewhere, nowhere, somewhere else, guess",
-            offset=1.5,
-            scale=-2.1,
-            channel_dict={0: "AIN0", 2: "AIN3", 3: "AIN2"},
-            array_len=16,
-        )
-        self.check_topic_handler(
-            topic_name="tel_pressure",
-            topic_handler=topic_handlers[1],
-            sensor_name="labjack_test_2",
-            field_name="pressure",
-            location="top of stack, bottom of stack",
-            offset=0,
-            scale=1,
-            channel_dict={0: "AIN4", 1: "AIN5"},
-            array_len=8,
-        )
-        self.check_topic_handler(
-            topic_name="tel_temperature",
-            topic_handler=topic_handlers[2],
-            sensor_name="labjack_test_3",
-            field_name="temperature",
-            location="none, here",
-            offset=0,
-            scale=1,
-            channel_dict={1: "AIN6"},
-            array_len=16,
-        )
+            # Each topic handler should have handled one set of data.
+            # Topic handlers are for temperature, pressure, temperature,
+            # and the last topic is the same instance as the first.
+            temperature_topic = topic_handlers[0].topic
+            pressure_topic = topic_handlers[1].topic
+            assert topic_handlers[2].topic is temperature_topic
+            assert temperature_topic.attr_name == "tel_temperature"
+            assert pressure_topic.attr_name == "tel_pressure"
+            assert len(temperature_topic.data_list) == 2
+            assert len(pressure_topic.data_list) == 1
+            assert [data.sensorName for data in temperature_topic.data_list] == [
+                "labjack_test_1",
+                "labjack_test_3",
+            ]
+            assert [data.sensorName for data in pressure_topic.data_list] == [
+                "labjack_test_2"
+            ]
+            self.check_topic_handler(
+                topic_handler=topic_handlers[0],
+                topic_name="tel_temperature",
+                sensor_name="labjack_test_1",
+                field_name="temperatureItem",
+                location="somewhere, nowhere, somewhere else, guess",
+                offset=1.5,
+                scale=-2.1,
+                channel_dict={0: "AIN0", 2: "AIN3", 3: "AIN2"},
+                array_len=16,
+            )
+            self.check_topic_handler(
+                topic_name="tel_pressure",
+                topic_handler=topic_handlers[1],
+                sensor_name="labjack_test_2",
+                field_name="pressureItem",
+                location="top of stack, bottom of stack",
+                offset=0,
+                scale=1,
+                channel_dict={0: "AIN4", 1: "AIN5"},
+                array_len=8,
+            )
+            self.check_topic_handler(
+                topic_name="tel_temperature",
+                topic_handler=topic_handlers[2],
+                sensor_name="labjack_test_3",
+                field_name="temperatureItem",
+                location="none, here",
+                offset=0,
+                scale=1,
+                channel_dict={1: "AIN6"},
+                array_len=16,
+            )
 
-        self.check_data(
-            data=data,
-            topic_handler=topic_handlers[0],
-            raw_data_dict=mock_raw_data_dict,
-        )
-        data_list = topic_handlers[1].topic.data_dict["labjack_test_2"]
-        assert len(data_list) == 1
-        data = data_list[0]
-        self.check_data(
-            data=data,
-            topic_handler=topic_handlers[1],
-            raw_data_dict=mock_raw_data_dict,
-        )
-        data_list = topic_handlers[2].topic.data_dict["labjack_test_3"]
-        assert len(data_list) == 1
-        data = data_list[0]
-        self.check_data(
-            data=data,
-            topic_handler=topic_handlers[2],
-            raw_data_dict=mock_raw_data_dict,
-        )
-
-        await data_client.stop()
-        assert data_client.handle is None
-        assert data_client.run_task.done()
+            self.check_data(
+                data=temperature_topic.data_list[0],
+                topic_handler=topic_handlers[0],
+                raw_data_dict=mock_raw_data_dict,
+            )
+            self.check_data(
+                data=pressure_topic.data_list[0],
+                topic_handler=topic_handlers[1],
+                raw_data_dict=mock_raw_data_dict,
+            )
+            self.check_data(
+                data=temperature_topic.data_list[1],
+                topic_handler=topic_handlers[2],
+                raw_data_dict=mock_raw_data_dict,
+            )
 
     async def test_registry(self) -> None:
         data_client_class = common.get_data_client_class("LabJackDataClient")
