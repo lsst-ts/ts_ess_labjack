@@ -41,7 +41,7 @@ CONNECT_TIMEOUT = 5
 MOCK_IDENTIFIER = "LJM_DEMO_MODE"
 
 
-class BaseLabJackDataClient(common.BaseDataClient):
+class BaseLabJackDataClient(common.data_client.BaseDataClient):
     """Base class for ESS data clients that read a LabJack T7 or similar.
 
     Parameters

@@ -461,7 +461,9 @@ additionalProperties: false
         """Compute the PSD from scaled data."""
         return (
             np.abs(
-                np.fft.rfft(scaled_data) * self.sampling_interval / self.accel_array_len
+                np.fft.rfft(scaled_data)  # type: ignore
+                * self.sampling_interval  # type: ignore
+                / self.accel_array_len  # type: ignore
             )
             ** 2
         )

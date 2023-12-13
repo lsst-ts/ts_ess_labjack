@@ -252,7 +252,9 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
             )
 
     async def test_registry(self) -> None:
-        data_client_class = common.get_data_client_class("LabJackDataClient")
+        data_client_class = common.data_client.get_data_client_class(
+            "LabJackDataClient"
+        )
         assert data_client_class is labjack.LabJackDataClient
 
     def check_data(

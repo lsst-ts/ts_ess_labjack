@@ -401,7 +401,7 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
             assert np.allclose(psd_data, expected_psd_data)
 
     async def test_registry(self) -> None:
-        data_client_class = common.get_data_client_class(
+        data_client_class = common.data_client.get_data_client_class(
             "LabJackAccelerometerDataClient"
         )
         assert data_client_class is labjack.LabJackAccelerometerDataClient
