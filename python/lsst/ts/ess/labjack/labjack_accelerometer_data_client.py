@@ -57,6 +57,9 @@ NUM_CHANNELS_PER_ACCELEROMETER = 3
 # without using a crazy amount of memory.
 NUM_RANDOM_ACCEL_ARRAYS = 5
 
+# Random generator for mock data.
+RNG = np.random.default_rng(42)
+
 
 class LabJackAccelerometerDataClient(BaseLabJackDataClient):
     """Read 3-axis accelerometer data from a LabJack T7 or similar,
@@ -286,9 +289,6 @@ additionalProperties: false
 """
         )
 
-    def descr(self) -> str:
-        return f"identifier={self.config.identifier}"
-
     async def run(self) -> None:
         """Read and process data from the LabJack."""
         await self.start_data_stream()
@@ -338,8 +338,10 @@ additionalProperties: false
             if self.mock_raw_1d_data is None and self.make_random_mock_raw_1d_data:
                 # Generate random mock data
                 # using half the available scale of -10 to 10 volts.
-                self.mock_raw_1d_data = list(np.random.random(num_raw_samples) * 10 - 5)
+                self.mock_raw_1d_data = list(RNG.random(num_raw_samples) * 10 - 5)
             while True:
+                end_tai: float | None = None
+                scaled_data: np.ndarray | None = None
                 await asyncio.sleep(sleep_interval)
                 if self.mock_raw_1d_data is not None:
                     if mock_raw_iter is None:
@@ -350,7 +352,8 @@ additionalProperties: false
                     ]
                     end_tai = utils.current_tai()
                     scaled_data = self.scaled_data_from_raw(next_raw_arr)
-                self.start_processing_data(scaled_data, end_tai, (0, 0))
+                if scaled_data is not None and end_tai is not None:
+                    self.start_processing_data(scaled_data, end_tai, (0, 0))
         except asyncio.CancelledError:
             self.log.info("mock_stream ends")
         except Exception:
