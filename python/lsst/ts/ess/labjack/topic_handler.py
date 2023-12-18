@@ -127,24 +127,24 @@ class TopicHandler:
             )
         self.num_channels = max(i for i in self.channel_dict) + 1
 
-    async def put_data(self, data_dict: dict[str, float]) -> None:
-        """Write data to the topic.
+    async def write_telemetry(self, telemetry_dict: dict[str, float]) -> None:
+        """Write telemetry to the topic.
 
         Parameters
         ----------
-        data_dict : `dict` [`str`, `float`]
+        telemetry_dict : `dict` [`str`, `float`]
             dict of LabJack channel name: raw value.
             This may include more channels than this topic needs.
             SAL value = (LabJack value - offset) * scale
         """
-        data_arr = [math.nan] * self.array_len
+        telemetry_arr = [math.nan] * self.array_len
         for i, channel_name in self.channel_dict.items():
-            data_arr[i] = (data_dict[channel_name] - self.offset) * self.scale
-        data_kwarg = {self.field_name: data_arr}
+            telemetry_arr[i] = (telemetry_dict[channel_name] - self.offset) * self.scale
+        telemetry_kwarg = {self.field_name: telemetry_arr}
         await self.topic.set_write(
             sensorName=self.sensor_name,
             timestamp=utils.current_tai(),
             location=self.location,
             numChannels=self.num_channels,
-            **data_kwarg,
+            **telemetry_kwarg,
         )

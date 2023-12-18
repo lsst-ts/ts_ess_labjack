@@ -41,8 +41,14 @@ logging.basicConfig(
 
 PathT: TypeAlias = str | pathlib.Path
 
-# Standard timeout in seconds
+# Standard timeout in seconds.
 TIMEOUT = 5
+
+# Random generator for mock data.
+RNG = np.random.default_rng(42)
+
+# Location string.
+LOCATION_STRING = "none, here"
 
 
 class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
@@ -57,7 +63,10 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
 
     @contextlib.asynccontextmanager
     async def make_topics(self) -> AsyncGenerator[types.SimpleNamespace, None]:
-        salobj.set_random_lsst_dds_partition_prefix()
+        if hasattr(salobj, "set_random_topic_subname"):
+            salobj.set_random_topic_subname()
+        else:
+            salobj.set_random_lsst_dds_partition_prefix()
         async with salobj.make_mock_write_topics(
             name="ESS", attr_names=["tel_temperature", "tel_pressure"]
         ) as topics:
@@ -89,8 +98,8 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
                 topic_handlers[0].location
                 == "somewhere, nowhere, somewhere else, guess"
             )
-            assert topic_handlers[0].offset == 1.5
-            assert topic_handlers[0].scale == -2.1
+            assert topic_handlers[0].offset == pytest.approx(1.5)
+            assert topic_handlers[0].scale == pytest.approx(-2.1)
             assert topic_handlers[0].num_channels == 4
             assert topic_handlers[0].channel_dict == {0: "AIN0", 2: "AIN3", 3: "AIN2"}
 
@@ -106,7 +115,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
             assert topic_handlers[2].topic.attr_name == "tel_temperature"
             assert topic_handlers[2].sensor_name == "labjack_test_3"
             assert topic_handlers[2].field_name == "temperatureItem"
-            assert topic_handlers[2].location == "none, here"
+            assert topic_handlers[2].location == LOCATION_STRING
             assert topic_handlers[2].offset == 0
             assert topic_handlers[2].scale == 1
             assert topic_handlers[2].num_channels == 2
@@ -132,7 +141,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
             assert topic_handlers[0].topic.attr_name == "tel_temperature"
             assert topic_handlers[0].sensor_name == "labjack_test_1"
             assert topic_handlers[0].field_name == "temperatureItem"
-            assert topic_handlers[0].location == "none, here"
+            assert topic_handlers[0].location == LOCATION_STRING
             assert topic_handlers[0].offset == 0
             assert topic_handlers[0].scale == 1
             assert topic_handlers[0].num_channels == 2
@@ -165,7 +174,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
             for topic_handler in topic_handlers:
                 num_channels += len(topic_handler.channel_dict)
             assert num_channels == 6
-            data_client.mock_raw_data = np.random.random(num_channels)
+            data_client.mock_raw_data = RNG.random(num_channels)
             mock_raw_data_dict = {
                 channel_name: value
                 for channel_name, value in zip(
@@ -228,7 +237,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
                 topic_handler=topic_handlers[2],
                 sensor_name="labjack_test_3",
                 field_name="temperatureItem",
-                location="none, here",
+                location=LOCATION_STRING,
                 offset=0,
                 scale=1,
                 channel_dict={1: "AIN6"},
@@ -252,7 +261,9 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
             )
 
     async def test_registry(self) -> None:
-        data_client_class = common.get_data_client_class("LabJackDataClient")
+        data_client_class = common.data_client.get_data_client_class(
+            "LabJackDataClient"
+        )
         assert data_client_class is labjack.LabJackDataClient
 
     def check_data(
@@ -269,12 +280,6 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
             The data
         topic_handler : labjack.TopicHandler
             Topic handler for this topic.
-        sensor_name : str
-            Sensor name.
-        location: str
-            Location string.
-        field_name: str
-            Name of array-valued field.
         raw_data_dict : `list` [`float`]
             Expected raw values, as a dict of channel_name: value
         """
@@ -315,10 +320,14 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
             Topic attribute name.
         sensor_name : `str`
             Expected sensor name.
-        location: str
-            Expected location string.
         field_name: `str`
             Expected name of array-valued field.
+        location: `str`
+            Expected location string.
+        offset : `float`
+            Expected offset.
+        scale : `float`
+            Expected scale.
         array_len : `int`
             Expected length of the array.
         channel_dict : `dict` [`int`, `str`]
