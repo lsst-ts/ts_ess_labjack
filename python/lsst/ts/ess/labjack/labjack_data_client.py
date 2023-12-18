@@ -219,11 +219,11 @@ additionalProperties: false
     async def run(self) -> None:
         """Read and process data from the LabJack."""
         while True:
-            data_dict = await self.run_in_thread(
+            telemetry_dict = await self.run_in_thread(
                 func=self._blocking_read, timeout=READ_TIMEOUT
             )
             for topic_handler in self.topic_handlers.values():
-                await topic_handler.put_data(data_dict)
+                await topic_handler.write_telemetry(telemetry_dict)
             # Support unit testing with a future the test can reset.
             self.wrote_event.set()
             await asyncio.sleep(self.config.poll_interval)
@@ -238,14 +238,14 @@ additionalProperties: false
         self._blocking_read()
 
     def _blocking_read(self) -> dict[str, float]:
-        """Read data from the LabJack. This can block.
+        """Read telemetry from the LabJack. This can block.
 
         Call in a thread to avoid blocking the event loop.
 
         Returns
         -------
-        data : `dict` [`str`, `float`]
-            The read data as a dict of channel_name: value.
+        `dict` [`str`, `float`]
+            The read telemetry as a dict of channel_name: value.
         """
         if self.handle is None:
             raise RuntimeError("Not connected")

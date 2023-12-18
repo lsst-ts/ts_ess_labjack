@@ -21,6 +21,7 @@
 
 __all__ = ["BaseLabJackDataClient"]
 
+import abc
 import asyncio
 import concurrent
 import logging
@@ -41,7 +42,7 @@ CONNECT_TIMEOUT = 5
 MOCK_IDENTIFIER = "LJM_DEMO_MODE"
 
 
-class BaseLabJackDataClient(common.BaseDataClient):
+class BaseLabJackDataClient(common.data_client.BaseDataClient, abc.ABC):
     """Base class for ESS data clients that read a LabJack T7 or similar.
 
     Parameters
@@ -208,6 +209,7 @@ class BaseLabJackDataClient(common.BaseDataClient):
             # but the error code is 2620, which does not match any constant
             # in ljm.errorcodes.
             if e.errorString == "STREAM_NOT_RUNNING":
+                # Deliberately ignore.
                 pass
             else:
                 self.log.warning(
