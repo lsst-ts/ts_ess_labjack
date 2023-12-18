@@ -6,6 +6,12 @@
 Version History
 ###############
 
+v1.1.0
+------
+
+* Adopt to common code move to ts_ess_common.
+* Code improvements.
+
 v1.0.1
 ------
 
