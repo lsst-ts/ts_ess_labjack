@@ -34,4 +34,3 @@ else:
 from .base_labjack_data_client import *
 from .labjack_accelerometer_data_client import *
 from .labjack_data_client import *
-from .topic_handler import *

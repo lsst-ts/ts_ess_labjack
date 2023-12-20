@@ -25,16 +25,16 @@ import asyncio
 import logging
 import types
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Type
 
 import yaml
 
 # Hide mypy error `Module "labjack" has no attribute "ljm"`.
 from labjack import ljm  # type: ignore
-from lsst.ts import salobj
+from lsst.ts import salobj, utils
+from lsst.ts.ess import common
 
 from .base_labjack_data_client import BaseLabJackDataClient
-from .topic_handler import TopicHandler
 
 # Time limit for communicating with the LabJack (seconds).
 # This includes writing a command and reading the response
@@ -70,11 +70,21 @@ class LabJackDataClient(BaseLabJackDataClient):
         super().__init__(
             config=config, topics=topics, log=log, simulation_mode=simulation_mode
         )
+        # The telemetry processor.
+        self.processor: common.processor.BaseProcessor | None = None
         # List of LabJack channel names to read.
         self.channel_names: Sequence[str] = []
+        # List of offsets.
+        self.offsets: Sequence[str] = []
+        # List of scales.
+        self.scales: Sequence[str] = []
 
-        # dict of (topic_attr_name, sensor_name): TopicHandler.
-        self.topic_handlers: dict[tuple[str, str], TopicHandler] = dict()
+        # Dict of SensorType: BaseProcessor type.
+        self.telemetry_processor_dict: dict[
+            str, Type[common.processor.BaseProcessor]
+        ] = {
+            "AuxTelCameraCoolantPressureProcessor": common.processor.AuxTelCameraCoolantPressureProcessor,
+        }
 
         # An event that unit tests can use to wait for data to be written.
         # A test can clear the event, then wait for it to be set.
@@ -115,62 +125,58 @@ properties:
     description: Polling interval (seconds)
     type: number
     default: 1
-  topics:
+  processor:
+    description: The telemetry processor.
+    type: string
+    enum:
+      - AuxTelCameraCoolantPressureProcessor
+  sensor_name:
+    description: Value for the sensor_name field of the topic.
+    type: string
+  location:
     description: >-
-      Information about the ESS SAL topics this client writes. Note that this
-      data client only supports array-valued topics, such as tel_temperature.
+      Location of sensors. A comma-separated list,
+      with one item per non-null channel_name.
+    type: string
+  channel_names:
+    description: >-
+      LabJack channel names, in order of the field array.
+      Specify empty strings for skipped channels.
+      Here is an example that sets temperature indices 0, 2, and 3
+      (skipping index 1): [AIN05, "", AIN07, AIN06]
     type: array
     minItems: 1
     items:
-      type: object
-      properties:
-        topic_name:
-          description: SAL topic attribute name, e.g. tel_temperature.
-          type: string
-        sensor_name:
-          description: Value for the sensor_name field of the topic.
-          type: string
-        field_name:
-          description: Name of array-valued SAL topic field.
-          type: string
-        location:
-          description: >-
-            Location of sensors. A comma-separated list,
-            with one item per non-null channel_name.
-          type: string
-        channel_names:
-          description: >-
-            LabJack channel names, in order of the field array.
-            Specify empty strings for skipped channels.
-            Here is an example that sets temperature indices 0, 2, and 3
-            (skipping index 1): [AIN05, "", AIN07, AIN06]
-          type: array
-          minItems: 1
-          items:
-            type: string
-        offset:
-          description: SAL value = (LabJack value - offset) * scale
-          type: number
-          default: 0
-        scale:
-          description: SAL value = (LabJack value - offset) * scale
-          type: number
-          default: 1
-      required:
-        - topic_name
-        - sensor_name
-        - field_name
-        - location
-        - channel_names
-        - offset
-        - scale
-      additionalProperties: false
+      type: string
+  offsets:
+    description: >-
+      Array of offsets, one per channel.
+      SAL value = (LabJack value - offset) * scale
+    type: array
+    minItems: 1
+    items:
+      type: number
+    default: 0
+  scales:
+    description: >-
+      Array of scales, one per channel.
+      SAL value = (LabJack value - offset) * scale
+    type: array
+    minItems: 1
+    items:
+      type: number
+    default: 1
 required:
   - device_type
   - connection_type
   - identifier
   - poll_interval
-  - topics
+  - processor
+  - sensor_name
+  - location
+  - channel_names
+  - offsets
+  - scales
 additionalProperties: false
 """
         )
@@ -183,47 +189,42 @@ additionalProperties: false
         This provides easy access when processing telemetry.
         """
         # set of all LabJack channel names to read.
-        channel_names: set[str] = set()
-        for topic_info_dict in self.config.topics:
-            topic_info = types.SimpleNamespace(**topic_info_dict)
-            topic_name = topic_info.topic_name
-            topic_key = (topic_name, topic_info.sensor_name)
-
-            if topic_key in self.topic_handlers:
-                raise RuntimeError(
-                    f"topic_name={topic_name} with sensor_name={topic_info.sensor_name} "
-                    "listed more than once"
-                )
-            topic = getattr(self.topics, topic_name, None)
-            if topic is None:
-                raise RuntimeError(f"topic {topic_name} not found")
-            topic_handler = TopicHandler(
-                topic=topic,
-                sensor_name=topic_info.sensor_name,
-                field_name=topic_info.field_name,
-                location=topic_info.location,
-                channel_names=topic_info.channel_names,
-                offset=topic_info.offset,
-                scale=topic_info.scale,
+        device_config = common.DeviceConfig(
+            name=self.config.sensor_name,
+            dev_type=None,
+            dev_id="",
+            sens_type=None,
+            baud_rate=0,
+            location=self.config.location,
+        )
+        processor_type = self.telemetry_processor_dict[self.config.processor]
+        self.processor = processor_type(device_config, self.topics, self.log)
+        self.channel_names = self.config.channel_names
+        self.offsets = self.config.offsets
+        self.scales = self.config.scales
+        if len(self.offsets) != len(self.channel_names):
+            raise ValueError(
+                f"The number of offsets {len(self.offsets)} doesn't correspond "
+                f"to the number of channels {len(self.channel_names)}."
             )
-            self.topic_handlers[topic_key] = topic_handler
-            new_channel_names = set(topic_handler.channel_dict.values())
-            overlap_channel_names = new_channel_names & channel_names
-            if overlap_channel_names:
-                raise ValueError(
-                    f"Channel names {sorted(overlap_channel_names)} appear more than once."
-                )
-            channel_names |= new_channel_names
-        self.channel_names = tuple(sorted(channel_names))
+        if len(self.scales) != len(self.channel_names):
+            raise ValueError(
+                f"The number of scales {len(self.scales)} doesn't correspond "
+                f"to the number of channels {len(self.channel_names)}."
+            )
 
     async def run(self) -> None:
         """Read and process data from the LabJack."""
         while True:
-            telemetry_dict = await self.run_in_thread(
+            telemetry = await self.run_in_thread(
                 func=self._blocking_read, timeout=READ_TIMEOUT
             )
-            for topic_handler in self.topic_handlers.values():
-                await topic_handler.write_telemetry(telemetry_dict)
+            assert self.processor is not None
+            await self.processor.process_telemetry(
+                timestamp=utils.current_tai(),
+                response_code=0,
+                sensor_data=telemetry,
+            )
             # Support unit testing with a future the test can reset.
             self.wrote_event.set()
             await asyncio.sleep(self.config.poll_interval)
@@ -237,15 +238,15 @@ additionalProperties: false
         super()._blocking_connect()
         self._blocking_read()
 
-    def _blocking_read(self) -> dict[str, float]:
+    def _blocking_read(self) -> list[float]:
         """Read telemetry from the LabJack. This can block.
 
         Call in a thread to avoid blocking the event loop.
 
         Returns
         -------
-        `dict` [`str`, `float`]
-            The read telemetry as a dict of channel_name: value.
+        `list` [`float`]
+            The read telemetry as a list of values.
         """
         if self.handle is None:
             raise RuntimeError("Not connected")
@@ -263,4 +264,8 @@ additionalProperties: false
             raise RuntimeError(
                 f"len(channel_names)={self.channel_names} != len(values)={values}"
             )
-        return {name: value for name, value in zip(self.channel_names, values)}
+        converted_values = []
+        # Apply the corresponding offset and scale to each value.
+        for i in range(len(values)):
+            converted_values.append((values[i] - self.offsets[i]) * self.scales[i])
+        return converted_values
