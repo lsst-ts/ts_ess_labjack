@@ -159,6 +159,46 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
                 )
             self.check_event(topics.evt_sensorStatus, config.sensor_name, 0, 0)
 
+    async def test_gill_3d_anemometer(self) -> None:
+        async with self.make_topics() as topics:
+            config = self.get_config("gill_3d_anemometer.yaml")
+            data_client = labjack.LabJackDataClient(
+                config=config, topics=topics, log=self.log, simulation_mode=1
+            )
+            assert data_client.handle is None
+            assert data_client.run_task.done()
+
+            num_channels = 4
+            data_client.mock_raw_data = RNG.random(num_channels)
+
+            await data_client.start()
+            assert data_client.handle is not None
+            assert not data_client.run_task.done()
+
+            # Wait for data to be written, then check it.
+            for _ in range(config.num_samples):
+                data_client.wrote_event.clear()
+                await asyncio.wait_for(data_client.wrote_event.wait(), timeout=TIMEOUT)
+
+            await data_client.stop()
+            assert data_client.handle is None
+            assert data_client.run_task.done()
+
+            assert topics.tel_airTurbulence.data.sensorName == config.sensor_name
+            for i in range(3):
+                assert -5.0 <= topics.tel_airTurbulence.data.speed[i] <= -3.0
+                assert topics.tel_airTurbulence.data.speedStdDev[i] == pytest.approx(
+                    0.0
+                )
+            assert 5.0 <= topics.tel_airTurbulence.data.speedMagnitude <= 8.0
+            assert 5.0 <= topics.tel_airTurbulence.data.speedMaxMagnitude <= 10.0
+            assert -30.0 <= topics.tel_airTurbulence.data.sonicTemperature <= -10.0
+            assert (
+                topics.tel_airTurbulence.data.sonicTemperatureStdDev
+                == pytest.approx(0.0)
+            )
+            self.check_event(topics.evt_sensorStatus, config.sensor_name, 0, 0)
+
     async def test_registry(self) -> None:
         data_client_class = common.data_client.get_data_client_class(
             "LabJackDataClient"

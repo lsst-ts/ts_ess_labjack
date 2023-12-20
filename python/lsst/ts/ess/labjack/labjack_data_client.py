@@ -83,6 +83,7 @@ class LabJackDataClient(BaseLabJackDataClient):
         self.telemetry_processor_dict: dict[
             str, Type[common.processor.BaseProcessor]
         ] = {
+            "AirTurbulenceProcessor": common.processor.AirTurbulenceProcessor,
             "AuxTelCameraCoolantPressureProcessor": common.processor.AuxTelCameraCoolantPressureProcessor,
         }
 
@@ -129,6 +130,7 @@ properties:
     description: The telemetry processor.
     type: string
     enum:
+      - AirTurbulenceProcessor
       - AuxTelCameraCoolantPressureProcessor
   sensor_name:
     description: Value for the sensor_name field of the topic.
@@ -166,6 +168,13 @@ properties:
     items:
       type: number
     default: 1
+  num_samples:
+    description: >-
+      Number of samples per telemetry sample. Only relevant for
+      certain kinds of data, such as wind speed and direction.
+      Ignored for other kinds of data.
+    type: integer
+    minimum: 2
 required:
   - device_type
   - connection_type
@@ -177,7 +186,6 @@ required:
   - channel_names
   - offsets
   - scales
-additionalProperties: false
 """
         )
 
@@ -188,7 +196,6 @@ additionalProperties: false
 
         This provides easy access when processing telemetry.
         """
-        # set of all LabJack channel names to read.
         device_config = common.DeviceConfig(
             name=self.config.sensor_name,
             dev_type=None,
@@ -197,6 +204,8 @@ additionalProperties: false
             baud_rate=0,
             location=self.config.location,
         )
+        if hasattr(self.config, "num_samples"):
+            device_config.num_samples = self.config.num_samples
         processor_type = self.telemetry_processor_dict[self.config.processor]
         self.processor = processor_type(device_config, self.topics, self.log)
         self.channel_names = self.config.channel_names
