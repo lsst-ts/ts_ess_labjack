@@ -6,6 +6,13 @@
 Version History
 ###############
 
+v1.2.0
+------
+
+* Eliminate TopicReaders and replace with telemetry processors.
+* Add support for the Gill 3D Anemometer.
+* Remove logging configuration from tests.
+
 v1.1.0
 ------
 
