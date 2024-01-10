@@ -1,6 +1,4 @@
 identifier: test.foo.bar
-topics:
-  - topic_name: tel_temperature
-    sensor_name: labjack_test_1
-    field_name: temperatureItem
-    channel_names: ["", "AIN2"]
+processor: TemperatureProcessor
+sensor_name: labjack_test_1
+channel_names: ["", "AIN2"]

@@ -1,7 +1,5 @@
 identifier: test.foo.bar
-topics:
-  - topic_name: tel_temperature
-    sensor_name: labjack_test_1
-    field_name: temperatureItem
-    location: none, here
-    channel_names: []
+processor: TemperatureProcessor
+sensor_name: labjack_test_1
+location: none, here
+channel_names: []

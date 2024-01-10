@@ -1,6 +1,4 @@
 identifier: test.foo.bar
-topics:
-  - topic_name: tel_temperature
-    field_name: temperatureItem
-    location: none, here
-    channel_names: ["", "AIN2"]
+processor: TemperatureProcessor
+location: none, here
+channel_names: ["", "AIN2"]

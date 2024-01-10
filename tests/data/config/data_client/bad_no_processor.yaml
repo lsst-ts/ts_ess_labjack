@@ -1,4 +1,4 @@
 identifier: test.foo.bar
-processor: TemperatureProcessor
 sensor_name: labjack_test_1
 location: none, here
+channel_names: ["", "AIN2"]

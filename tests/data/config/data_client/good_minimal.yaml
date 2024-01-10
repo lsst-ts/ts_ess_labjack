@@ -1,7 +1,7 @@
 identifier: test.foo.bar
-topics:
-  - topic_name: tel_temperature
-    sensor_name: labjack_test_1
-    field_name: temperatureItem
-    location: none, here
-    channel_names: ["", "AIN2"]
+processor: AuxTelCameraCoolantPressureProcessor
+sensor_name: AuxTel-LabJack01
+location: Camera coolant high side, Camera coolant low side
+channel_names: [AIN0, AIN1]
+offsets: [0, 0]
+scales: [344738.0, 344738.0]
