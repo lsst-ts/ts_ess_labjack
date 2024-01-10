@@ -34,10 +34,6 @@ import yaml
 from lsst.ts import salobj
 from lsst.ts.ess import common, labjack
 
-logging.basicConfig(
-    format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG
-)
-
 PathT: TypeAlias = str | pathlib.Path
 
 # Standard timeout in seconds.

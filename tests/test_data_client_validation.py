@@ -19,7 +19,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import logging
 import pathlib
 import types
 import unittest
@@ -32,10 +31,6 @@ from lsst.ts import salobj
 from lsst.ts.ess import labjack
 
 PathT: TypeAlias = str | pathlib.Path
-
-logging.basicConfig(
-    format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG
-)
 
 # Standard timeout in seconds
 TIMEOUT = 5
