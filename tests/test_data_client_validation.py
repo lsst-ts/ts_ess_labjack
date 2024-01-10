@@ -19,7 +19,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import logging
 import pathlib
 import types
 import unittest
@@ -32,10 +31,6 @@ from lsst.ts import salobj
 from lsst.ts.ess import labjack
 
 PathT: TypeAlias = str | pathlib.Path
-
-logging.basicConfig(
-    format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG
-)
 
 # Standard timeout in seconds
 TIMEOUT = 5
@@ -55,32 +50,10 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
         # Check against the values in file good_full.yaml.
         assert config.device_type == "T4"
         assert config.connection_type == "USB"
-        assert config.poll_interval == 0.2
-        assert len(config.topics) == 3
-        topics = [types.SimpleNamespace(**topic_dict) for topic_dict in config.topics]
-        assert topics[0].topic_name == "tel_temperature"
-        assert topics[0].sensor_name == "labjack_test_1"
-        assert topics[0].field_name == "temperatureItem"
-        assert topics[0].location == "somewhere, nowhere, somewhere else, guess"
-        assert topics[0].channel_names == ["AIN0", "", "AIN3", "AIN2"]
-        assert topics[0].offset == 1.5
-        assert topics[0].scale == -2.1
-
-        assert topics[1].topic_name == "tel_pressure"
-        assert topics[1].sensor_name == "labjack_test_2"
-        assert topics[1].field_name == "pressureItem"
-        assert topics[1].location == "top of stack, bottom of stack"
-        assert topics[1].channel_names == ["AIN4", "AIN5"]
-        assert topics[1].offset == 0
-        assert topics[1].scale == 1
-
-        assert topics[2].topic_name == "tel_temperature"
-        assert topics[2].sensor_name == "labjack_test_3"
-        assert topics[2].field_name == "temperatureItem"
-        assert topics[2].location == "none, here"
-        assert topics[2].channel_names == ["", "AIN6"]
-        assert topics[2].offset == 0
-        assert topics[2].scale == 1
+        assert config.poll_interval == pytest.approx(0.2)
+        assert config.processor == "AuxTelCameraCoolantPressureProcessor"
+        assert len(config.channel_names) == len(config.offsets)
+        assert len(config.channel_names) == len(config.scales)
 
     async def test_good_minimal(self) -> None:
         config = self.get_and_validate_config("good_minimal.yaml")
@@ -89,15 +62,9 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
         assert config.device_type == "T7"
         assert config.connection_type == "TCP"
         assert config.poll_interval == 1
-        assert len(config.topics) == 1
-        topics = [types.SimpleNamespace(**topic_dict) for topic_dict in config.topics]
-        assert topics[0].topic_name == "tel_temperature"
-        assert topics[0].sensor_name == "labjack_test_1"
-        assert topics[0].field_name == "temperatureItem"
-        assert topics[0].location == "none, here"
-        assert topics[0].channel_names == ["", "AIN2"]
-        assert topics[0].offset == 0
-        assert topics[0].scale == 1
+        assert config.processor == "AuxTelCameraCoolantPressureProcessor"
+        assert len(config.channel_names) == len(config.offsets)
+        assert len(config.channel_names) == len(config.scales)
 
     async def test_bad(self) -> None:
         for path in self.data_dir.glob("bad_*.yaml"):
