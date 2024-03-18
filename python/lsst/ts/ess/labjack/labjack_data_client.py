@@ -41,6 +41,12 @@ from .base_labjack_data_client import BaseLabJackDataClient
 # and reading telemetry (seconds).
 READ_TIMEOUT = 5
 
+# Sleep time before trying to reconnect (seconds).
+RECONNECT_WAIT = 60
+
+# Maximum number of allowed timeouts before throwing an error.
+MAX_TIMEOUTS = 5
+
 
 class LabJackDataClient(BaseLabJackDataClient):
     """Get environmental data from a LabJack T7 or similar.
@@ -224,19 +230,29 @@ required:
 
     async def run(self) -> None:
         """Read and process data from the LabJack."""
+        num_consecutive_timeouts = 0
         while True:
-            telemetry = await self.run_in_thread(
-                func=self._blocking_read, timeout=READ_TIMEOUT
-            )
-            assert self.processor is not None
-            await self.processor.process_telemetry(
-                timestamp=utils.current_tai(),
-                response_code=0,
-                sensor_data=telemetry,
-            )
-            # Support unit testing with a future the test can reset.
-            self.wrote_event.set()
-            await asyncio.sleep(self.config.poll_interval)
+            try:
+                telemetry = await self.run_in_thread(
+                    func=self._blocking_read, timeout=READ_TIMEOUT
+                )
+                assert self.processor is not None
+                await self.processor.process_telemetry(
+                    timestamp=utils.current_tai(),
+                    response_code=0,
+                    sensor_data=telemetry,
+                )
+                num_consecutive_timeouts = 0
+                # Support unit testing with a future the test can reset.
+                self.wrote_event.set()
+                await asyncio.sleep(self.config.poll_interval)
+            except asyncio.TimeoutError as e:
+                num_consecutive_timeouts += 1
+                if num_consecutive_timeouts >= MAX_TIMEOUTS:
+                    self.log.error("Maximum number of timeouts reached. Giving up.")
+                    raise RuntimeError(e)
+                self.log.warning(f"Timeout. Trying again in {RECONNECT_WAIT} seconds.")
+                await asyncio.sleep(RECONNECT_WAIT)
 
     def _blocking_connect(self) -> None:
         """Connect and then read the specified channels.

@@ -6,6 +6,11 @@
 Version History
 ###############
 
+v1.2.1
+------
+
+* Retry reading telemetry after a timeout.
+
 v1.2.0
 ------
 
