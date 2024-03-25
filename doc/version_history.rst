@@ -9,6 +9,11 @@ Version History
 v1.2.1
 ------
 
+* Update the version of ts-conda-build to 0.4 in the conda recipe.
+
+v1.2.1
+------
+
 * Retry reading telemetry after a timeout.
 
 v1.2.0
