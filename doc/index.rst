@@ -68,7 +68,7 @@ Contributing
 ------------
 
 ``lsst.ts.ess.labjack`` is developed at https://github.com/lsst-ts/ts_ess_labjack.
-You can find Jira issues for this module using `labels=ts_ess_labjack <https://jira.lsstcorp.org/issues/?jql=project%3DDM%20AND%20labels%3Dts_ess_labjack>`_.
+You can find Jira issues for this module using `labels=ts_ess_labjack <https://rubinobs.atlassian.net/issues/?jql=project%3DDM%20AND%20labels%3Dts_ess_labjack>`_.
 
 Version History
 ===============

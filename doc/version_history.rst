@@ -6,6 +6,12 @@
 Version History
 ###############
 
+v1.2.3
+------
+
+* Verify fix for air turbulence speed magnitude calculation.
+* Update Jira URL.
+
 v1.2.2
 ------
 
