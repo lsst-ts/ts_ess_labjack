@@ -6,6 +6,11 @@
 Version History
 ###############
 
+v1.2.3
+------
+
+* Verify fix for air turbulence speed magnitude calculation.
+
 v1.2.2
 ------
 
