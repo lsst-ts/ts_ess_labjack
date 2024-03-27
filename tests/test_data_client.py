@@ -186,7 +186,11 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
                 assert topics.tel_airTurbulence.data.speedStdDev[i] == pytest.approx(
                     0.0
                 )
-            assert 5.0 <= topics.tel_airTurbulence.data.speedMagnitude <= 8.0
+            speed = topics.tel_airTurbulence.data.speed
+            speed_magnitude = np.sqrt(speed[0] ** 2 + speed[1] ** 2 + speed[2] ** 2)
+            assert np.isclose(
+                topics.tel_airTurbulence.data.speedMagnitude, speed_magnitude
+            )
             assert 5.0 <= topics.tel_airTurbulence.data.speedMaxMagnitude <= 10.0
             assert -30.0 <= topics.tel_airTurbulence.data.sonicTemperature <= -10.0
             assert (
