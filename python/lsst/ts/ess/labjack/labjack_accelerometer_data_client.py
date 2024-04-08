@@ -294,6 +294,19 @@ additionalProperties: false
         await self.start_data_stream()
         await asyncio.Future()
 
+    async def read_data(self) -> None:
+        """Read data.
+
+        Notes
+        -----
+        This method should never be called because this class overrides the
+        run method which, in the super class, calls this read_data method.
+        """
+        raise NotImplementedError(
+            "This method should never be called. Please ensure that "
+            "the `run` method is implemented in this class."
+        )
+
     async def disconnect(self) -> None:
         self.mock_stream_task.cancel()
         self.process_data_task.cancel()
