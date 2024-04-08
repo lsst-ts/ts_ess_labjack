@@ -6,6 +6,11 @@
 Version History
 ###############
 
+v1.2.4
+------
+
+* Change parent class from BaseDataClient to BaseReadDataClient for better reconnection control.
+
 v1.2.3
 ------
 
