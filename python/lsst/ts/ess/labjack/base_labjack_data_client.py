@@ -42,7 +42,7 @@ CONNECT_TIMEOUT = 5
 MOCK_IDENTIFIER = "LJM_DEMO_MODE"
 
 
-class BaseLabJackDataClient(common.data_client.BaseDataClient, abc.ABC):
+class BaseLabJackDataClient(common.data_client.BaseReadLoopDataClient, abc.ABC):
     """Base class for ESS data clients that read a LabJack T7 or similar.
 
     Parameters
@@ -77,6 +77,9 @@ class BaseLabJackDataClient(common.data_client.BaseDataClient, abc.ABC):
 
         # The thread pool executor used by `run_in_thread`.
         self._thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
+        # Set the maximum allowed number of read timeouts.
+        config.max_read_timeouts = 5
 
         super().__init__(
             config=config, topics=topics, log=log, simulation_mode=simulation_mode
