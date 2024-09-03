@@ -398,15 +398,15 @@ additionalProperties: false
             actual_scan_frequency = min(
                 desired_scan_frequency, MAX_MOCK_READ_FREQUENCY / self.num_channels
             )
-            self.loop.call_soon_threadsafe(self.start_mock_stream)
-
-        # Do not await until self.sampling_interval, self.acquisition_time,
-        # and self.psd_frequencies have all been computed.
-        # The background task started just above needs them.
 
         self.sampling_interval = 1 / actual_scan_frequency
         assert self.sampling_interval is not None  # mypy idiocy
         self.acquisition_time = self.sampling_interval * (self.accel_array_len - 1)
+
+        # The mock stream can only be started after the acquisition time has
+        # been calculated.
+        if self.simulation_mode != 0:
+            self.loop.call_soon_threadsafe(self.start_mock_stream)
 
         self.log.info(f"{desired_scan_frequency=}, {actual_scan_frequency=}")
         # Warn if the LabJack cannot gather data as quickly as requested.
