@@ -275,6 +275,7 @@ required:
         if self.simulation_mode != 0 and self.mock_raw_data is not None:
             assert len(self.mock_raw_data) == len(values)
             values = self.mock_raw_data
+            self.log.debug("read mock values %s", values)
         else:
             self.log.debug(
                 "read values %s from channels %s", values, self.channel_names

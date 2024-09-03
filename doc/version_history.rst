@@ -6,6 +6,13 @@
 Version History
 ###############
 
+v1.2.5
+------
+
+* Fix the conda recipe.
+* Fix acceleromater simulator startup bug.
+* Add debug statement to generic LabJack data client class.
+
 v1.2.4
 ------
 
