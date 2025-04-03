@@ -13,10 +13,9 @@ build:
 test:
   requires:
     - ts-conda-build =0.4
-    - ts-idl {{ idl_version }}
-    - ts-utils
     - ts-salobj {{ salobj_version }}
-    - labjack-ljm
+    - ts-utils
+    - ts-xml {{ xml_version }}
   source_files:
     - python
     - tests
@@ -35,7 +34,9 @@ requirements:
     - setuptools
   run:
     - python {{ python }}
-    - ts-idl
     - ts-salobj
     - ts-utils
+    - ts-xml
     - ts-ess-common
+    - labjack-ljm
+    - libusb
