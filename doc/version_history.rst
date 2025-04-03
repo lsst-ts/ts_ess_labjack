@@ -6,6 +6,11 @@
 Version History
 ###############
 
+v1.2.6
+------
+
+* Add libusb to and fix the conda recipe.
+
 v1.2.5
 ------
 
