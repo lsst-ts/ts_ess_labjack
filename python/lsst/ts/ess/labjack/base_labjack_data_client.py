@@ -81,6 +81,9 @@ class BaseLabJackDataClient(common.data_client.BaseReadLoopDataClient, abc.ABC):
         # Set the maximum allowed number of read timeouts.
         config.max_read_timeouts = 5
 
+        # Set the connect timeout.
+        config.connect_timeout = CONNECT_TIMEOUT
+
         super().__init__(
             config=config, topics=topics, log=log, simulation_mode=simulation_mode
         )
@@ -91,6 +94,22 @@ class BaseLabJackDataClient(common.data_client.BaseReadLoopDataClient, abc.ABC):
 
     def descr(self) -> str:
         return f"identifier={self.config.identifier}"
+
+    async def start(self) -> None:
+        """Start the run task."""
+        await self.connect()
+        self.run_task = asyncio.create_task(self.run())
+
+    async def stop(self) -> None:
+        """Stop reading and publishing data.
+
+        This is alway safe to call, whether connected or not.
+        This should raise no exceptions except asyncio.CancelledError.
+        If `disconnect` raises, this logs the exception and continues.
+        """
+        self.log.debug("Stop called.")
+        await self.disconnect()
+        self.run_task.cancel()
 
     async def run_in_thread(self, func: Callable[[], Any], timeout: float) -> Any:
         """Run a blocking function in a thread pool executor.
