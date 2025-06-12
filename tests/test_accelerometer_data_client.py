@@ -249,6 +249,7 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
                     data_client.wrote_psd_event.wait(), timeout=TIMEOUT
                 )
             await data_client.stop()
+            await asyncio.sleep(0.1)
             assert data_client.handle is None
             assert data_client.run_task.done()
 
@@ -335,6 +336,7 @@ class AccelerationDataClientTestCase(unittest.IsolatedAsyncioTestCase):
             data_client.wrote_psd_event.clear()
             await asyncio.wait_for(data_client.wrote_psd_event.wait(), timeout=TIMEOUT)
             await data_client.stop()
+            await asyncio.sleep(0.1)
             assert data_client.handle is None
             assert data_client.run_task.done()
 

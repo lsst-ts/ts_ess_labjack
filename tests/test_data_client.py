@@ -58,10 +58,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
 
     @contextlib.asynccontextmanager
     async def make_topics(self) -> AsyncGenerator[types.SimpleNamespace, None]:
-        if hasattr(salobj, "set_random_topic_subname"):
-            salobj.set_random_topic_subname()
-        else:
-            salobj.set_random_lsst_dds_partition_prefix()
+        salobj.set_test_topic_subname()
         async with salobj.make_mock_write_topics(
             name="ESS",
             attr_names=["tel_airTurbulence", "tel_pressure", "evt_sensorStatus"],
@@ -145,6 +142,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
             data_client.wrote_event.clear()
             await asyncio.wait_for(data_client.wrote_event.wait(), timeout=TIMEOUT)
             await data_client.stop()
+            await asyncio.sleep(2)
             assert data_client.handle is None
             assert data_client.run_task.done()
 
@@ -154,6 +152,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
                     topics.tel_pressure.data.pressureItem[i]
                 )
             self.check_event(topics.evt_sensorStatus, config.sensor_name, 0, 0)
+            self.log.debug("WOUTER done.")
 
     async def test_gill_3d_anemometer(self) -> None:
         async with self.make_topics() as topics:
@@ -177,6 +176,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
                 await asyncio.wait_for(data_client.wrote_event.wait(), timeout=TIMEOUT)
 
             await data_client.stop()
+            await asyncio.sleep(2)
             assert data_client.handle is None
             assert data_client.run_task.done()
 
