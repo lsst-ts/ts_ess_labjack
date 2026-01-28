@@ -27,6 +27,7 @@ from typing import Any, TypeAlias
 import jsonschema
 import pytest
 import yaml
+
 from lsst.ts import salobj
 from lsst.ts.ess import labjack
 
@@ -38,9 +39,7 @@ TIMEOUT = 5
 
 class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
-        self.data_dir = (
-            pathlib.Path(__file__).parent / "data" / "config" / "data_client"
-        )
+        self.data_dir = pathlib.Path(__file__).parent / "data" / "config" / "data_client"
         self.config_schema = labjack.LabJackDataClient.get_config_schema()
         self.validator = salobj.DefaultingValidator(self.config_schema)
 

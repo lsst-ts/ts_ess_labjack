@@ -73,9 +73,7 @@ class LabJackDataClient(BaseLabJackDataClient):
         log: logging.Logger,
         simulation_mode: int = 0,
     ) -> None:
-        super().__init__(
-            config=config, topics=topics, log=log, simulation_mode=simulation_mode
-        )
+        super().__init__(config=config, topics=topics, log=log, simulation_mode=simulation_mode)
         # The telemetry processor.
         self.processor: common.processor.BaseProcessor | None = None
         # List of LabJack channel names to read.
@@ -86,9 +84,7 @@ class LabJackDataClient(BaseLabJackDataClient):
         self.scales: Sequence[str] = []
 
         # Dict of SensorType: BaseProcessor type.
-        self.telemetry_processor_dict: dict[
-            str, Type[common.processor.BaseProcessor]
-        ] = {
+        self.telemetry_processor_dict: dict[str, Type[common.processor.BaseProcessor]] = {
             "AirTurbulenceProcessor": common.processor.AirTurbulenceProcessor,
             "AuxTelCameraCoolantPressureProcessor": common.processor.AuxTelCameraCoolantPressureProcessor,
         }
@@ -231,9 +227,7 @@ required:
     async def read_data(self) -> None:
         """Read and process data from the LabJack."""
         try:
-            telemetry = await self.run_in_thread(
-                func=self._blocking_read, timeout=READ_TIMEOUT
-            )
+            telemetry = await self.run_in_thread(func=self._blocking_read, timeout=READ_TIMEOUT)
             assert self.processor is not None
             await self.processor.process_telemetry(
                 timestamp=utils.current_tai(),
@@ -277,13 +271,9 @@ required:
             values = self.mock_raw_data
             self.log.debug("read mock values %s", values)
         else:
-            self.log.debug(
-                "read values %s from channels %s", values, self.channel_names
-            )
+            self.log.debug("read values %s from channels %s", values, self.channel_names)
         if len(values) != len(self.channel_names):
-            raise RuntimeError(
-                f"len(channel_names)={self.channel_names} != len(values)={values}"
-            )
+            raise RuntimeError(f"len(channel_names)={self.channel_names} != len(values)={values}")
         converted_values = []
         # Apply the corresponding offset and scale to each value.
         for i in range(len(values)):

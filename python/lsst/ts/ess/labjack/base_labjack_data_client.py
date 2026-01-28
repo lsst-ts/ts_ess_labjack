@@ -84,9 +84,7 @@ class BaseLabJackDataClient(common.data_client.BaseReadLoopDataClient, abc.ABC):
         # Set the connect timeout.
         config.connect_timeout = CONNECT_TIMEOUT
 
-        super().__init__(
-            config=config, topics=topics, log=log, simulation_mode=simulation_mode
-        )
+        super().__init__(config=config, topics=topics, log=log, simulation_mode=simulation_mode)
 
     @property
     def connected(self) -> bool:
@@ -128,13 +126,9 @@ class BaseLabJackDataClient(common.data_client.BaseReadLoopDataClient, abc.ABC):
         """
         loop = asyncio.get_running_loop()
         try:
-            return await asyncio.wait_for(
-                loop.run_in_executor(self._thread_pool, func), timeout=timeout
-            )
+            return await asyncio.wait_for(loop.run_in_executor(self._thread_pool, func), timeout=timeout)
         except asyncio.CancelledError:
-            self.log.info(
-                f"run_in_thread cancelled while running blocking function {func}."
-            )
+            self.log.info(f"run_in_thread cancelled while running blocking function {func}.")
         except Exception:
             self.log.exception(f"Blocking function {func} failed.")
             raise
@@ -159,9 +153,7 @@ class BaseLabJackDataClient(common.data_client.BaseReadLoopDataClient, abc.ABC):
     async def disconnect(self) -> None:
         """Disconnect from the LabJack. A no-op if disconnected."""
         try:
-            await self.run_in_thread(
-                func=self._blocking_disconnect, timeout=CONNECT_TIMEOUT
-            )
+            await self.run_in_thread(func=self._blocking_disconnect, timeout=CONNECT_TIMEOUT)
         finally:
             self.handle = None
 
@@ -186,9 +178,7 @@ class BaseLabJackDataClient(common.data_client.BaseReadLoopDataClient, abc.ABC):
             identifier = MOCK_IDENTIFIER
             self.log.info(f"simulation mode, so identifier changed to {identifier!r}")
 
-        self.handle = ljm.openS(
-            self.config.device_type, self.config.connection_type, identifier
-        )
+        self.handle = ljm.openS(self.config.device_type, self.config.connection_type, identifier)
         self._blocking_stop_data_stream()
 
     def _blocking_disconnect(self) -> None:
@@ -235,6 +225,5 @@ class BaseLabJackDataClient(common.data_client.BaseReadLoopDataClient, abc.ABC):
                 pass
             else:
                 self.log.warning(
-                    "Could not stop LabJack streaming, but continuing anyway: "
-                    f"{e!r}: {e.errorString=}"
+                    f"Could not stop LabJack streaming, but continuing anyway: {e!r}: {e.errorString=}"
                 )
