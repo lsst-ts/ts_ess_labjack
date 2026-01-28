@@ -8,6 +8,23 @@ Version History
 
 .. towncrier release notes start
 
+v1.3.1 (2026-01-28)
+===================
+
+Performance Enhancement
+-----------------------
+
+- Set conda build string. (`OSW-982 <https://rubinobs.atlassian.net//browse/OSW-982>`_)
+- Updated ts_conda_build dependency version. (`OSW-982 <https://rubinobs.atlassian.net//browse/OSW-982>`_)
+- Made code compatible with numpy 2.4. (`OSW-1754 <https://rubinobs.atlassian.net//browse/OSW-1754>`_)
+
+
+Other Changes and Additions
+---------------------------
+
+- Fixed the documentation build. (`OSW-1754 <https://rubinobs.atlassian.net//browse/OSW-1754>`_)
+
+
 v1.3.0 (2025-06-12)
 ===================
 
