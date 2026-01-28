@@ -137,9 +137,7 @@ class LabJackAccelerometerDataClient(BaseLabJackDataClient):
         log: logging.Logger,
         simulation_mode: int = 0,
     ) -> None:
-        super().__init__(
-            config=config, topics=topics, log=log, simulation_mode=simulation_mode
-        )
+        super().__init__(config=config, topics=topics, log=log, simulation_mode=simulation_mode)
 
         self.accel_topic = topics.tel_accelerometer
         self.psd_topic = topics.tel_accelerometerPSD
@@ -151,18 +149,14 @@ class LabJackAccelerometerDataClient(BaseLabJackDataClient):
 
         if self.accel_array_len != 2 * self.psd_array_len - 2:
             raise RuntimeError(
-                f"num accel points = {self.accel_array_len} != "
-                f"num PSD points = {self.psd_array_len} * 2 - 2"
+                f"num accel points = {self.accel_array_len} != num PSD points = {self.psd_array_len} * 2 - 2"
             )
 
         self.accelerometers = [
-            types.SimpleNamespace(**accel_dict)
-            for accel_dict in self.config.accelerometers
+            types.SimpleNamespace(**accel_dict) for accel_dict in self.config.accelerometers
         ]
 
-        self.num_channels = NUM_CHANNELS_PER_ACCELEROMETER * len(
-            self.config.accelerometers
-        )
+        self.num_channels = NUM_CHANNELS_PER_ACCELEROMETER * len(self.config.accelerometers)
 
         self.psd_frequencies: np.ndarray | None = None
 
@@ -177,9 +171,7 @@ class LabJackAccelerometerDataClient(BaseLabJackDataClient):
         offsets: list[float] = []
         scales: list[float] = []
         for accelerometer in self.accelerometers:
-            self.modbus_addresses += [
-                analog_input * 2 for analog_input in accelerometer.analog_inputs
-            ]
+            self.modbus_addresses += [analog_input * 2 for analog_input in accelerometer.analog_inputs]
             offsets += list(accelerometer.offsets)
             scales += list(accelerometer.scales)
         self.offsets = np.array(offsets)
@@ -316,9 +308,7 @@ additionalProperties: false
         """Start the data stream from the LabJack."""
 
         t0 = utils.current_tai()
-        await self.run_in_thread(
-            func=self._blocking_start_data_stream, timeout=START_STREAMING_TIMEOUT
-        )
+        await self.run_in_thread(func=self._blocking_start_data_stream, timeout=START_STREAMING_TIMEOUT)
         dt = utils.current_tai() - t0
         self.log.debug(f"start_data_stream took {dt:0.2f} seconds")
 
@@ -345,9 +335,7 @@ additionalProperties: false
 
             sleep_interval = self.acquisition_time
             mock_raw_iter: collections.abc.Iterator[float] | None = None
-            num_raw_samples = (
-                NUM_RANDOM_ACCEL_ARRAYS * self.accel_array_len * self.num_channels
-            )
+            num_raw_samples = NUM_RANDOM_ACCEL_ARRAYS * self.accel_array_len * self.num_channels
             if self.mock_raw_1d_data is None and self.make_random_mock_raw_1d_data:
                 # Generate random mock data
                 # using half the available scale of -10 to 10 volts.
@@ -360,8 +348,7 @@ additionalProperties: false
                     if mock_raw_iter is None:
                         mock_raw_iter = itertools.cycle(self.mock_raw_1d_data)
                     next_raw_arr = [
-                        next(mock_raw_iter)
-                        for _ in range(self.accel_array_len * self.num_channels)
+                        next(mock_raw_iter) for _ in range(self.accel_array_len * self.num_channels)
                     ]
                     end_tai = utils.current_tai()
                     scaled_data = self.scaled_data_from_raw(next_raw_arr)
@@ -395,9 +382,7 @@ additionalProperties: false
             )
             ljm.setStreamCallback(self.handle, self.blocking_data_stream_callback)
         else:
-            actual_scan_frequency = min(
-                desired_scan_frequency, MAX_MOCK_READ_FREQUENCY / self.num_channels
-            )
+            actual_scan_frequency = min(desired_scan_frequency, MAX_MOCK_READ_FREQUENCY / self.num_channels)
 
         self.sampling_interval = 1 / actual_scan_frequency
         assert self.sampling_interval is not None  # mypy idiocy
@@ -420,9 +405,7 @@ additionalProperties: false
             )
 
         # Compute self.psd_frequencies
-        self.psd_frequencies = np.fft.rfftfreq(
-            self.accel_array_len, self.sampling_interval
-        )
+        self.psd_frequencies = np.fft.rfftfreq(self.accel_array_len, self.sampling_interval)
         assert self.psd_frequencies is not None  # make mypy happy
         assert len(self.psd_frequencies) == self.psd_array_len
 
@@ -468,7 +451,7 @@ additionalProperties: false
         npoints = len(raw_1d_data) // self.num_channels
         raw_2d_data = np.reshape(
             raw_1d_data,
-            newshape=(self.num_channels, npoints),
+            shape=(self.num_channels, npoints),
             order="F",
         )
         return (raw_2d_data - self.offsets[:, np.newaxis]) * self.scales[:, np.newaxis]
@@ -502,18 +485,12 @@ additionalProperties: false
             is keeping up with the LabJack.
         """
         if not self.process_data_task.done():
-            self.log.warning(
-                "An older process_data background task is still running; skipping this data"
-            )
+            self.log.warning("An older process_data background task is still running; skipping this data")
         self.process_data_task = asyncio.create_task(
-            self.process_data(
-                scaled_data=scaled_data, end_tai=end_tai, backlogs=backlogs
-            )
+            self.process_data(scaled_data=scaled_data, end_tai=end_tai, backlogs=backlogs)
         )
 
-    async def process_data(
-        self, scaled_data: np.ndarray, end_tai: float, backlogs: tuple[int, int]
-    ) -> None:
+    async def process_data(self, scaled_data: np.ndarray, end_tai: float, backlogs: tuple[int, int]) -> None:
         """Process one set of data.
 
         Parameters
@@ -534,11 +511,7 @@ additionalProperties: false
             If streaming has not yet begun (because self.sampling_interval
             is None until streaming begins).
         """
-        if (
-            self.sampling_interval is None
-            or self.acquisition_time is None
-            or self.psd_frequencies is None
-        ):
+        if self.sampling_interval is None or self.acquisition_time is None or self.psd_frequencies is None:
             raise RuntimeError("Sampling has not been configured")
 
         if scaled_data.shape != (self.num_channels, self.accel_array_len):
@@ -554,9 +527,7 @@ additionalProperties: false
             for accel_index, accelerometer in enumerate(self.accelerometers):
                 channel_start_index = accel_index * NUM_CHANNELS_PER_ACCELEROMETER
                 accel_kwargs = {
-                    f"acceleration{axis}": scaled_data[
-                        channel_start_index + channel_offset, :
-                    ]
+                    f"acceleration{axis}": scaled_data[channel_start_index + channel_offset, :]
                     for channel_offset, axis in enumerate(("X", "Y", "Z"))
                 }
                 await self.accel_topic.set_write(
@@ -571,9 +542,7 @@ additionalProperties: false
             for accel_index, accelerometer in enumerate(self.accelerometers):
                 channel_start_index = accel_index * NUM_CHANNELS_PER_ACCELEROMETER
                 psd_kwargs = {
-                    f"accelerationPSD{axis}": psd[
-                        channel_start_index + channel_offset, :
-                    ]
+                    f"accelerationPSD{axis}": psd[channel_start_index + channel_offset, :]
                     for channel_offset, axis in enumerate(("X", "Y", "Z"))
                 }
                 await self.psd_topic.set_write(
@@ -596,10 +565,8 @@ additionalProperties: false
         super()._blocking_connect()
 
         # Read each input channel, to make sure the configuration is valid.
-        input_channel_names = [f"AIN{addr//2}" for addr in self.modbus_addresses]
+        input_channel_names = [f"AIN{addr // 2}" for addr in self.modbus_addresses]
         num_frames = len(input_channel_names)
         values = ljm.eReadNames(self.handle, num_frames, input_channel_names)
         if len(values) != len(input_channel_names):
-            raise RuntimeError(
-                f"len(input_channel_names)={input_channel_names} != len(values)={values}"
-            )
+            raise RuntimeError(f"len(input_channel_names)={input_channel_names} != len(values)={values}")
