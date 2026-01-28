@@ -7,7 +7,7 @@ name = "ts_ess_labjack"
 description = "CSC to make the dome for the Rubin Observatory Simonyi Survey Telescope dome track the telescope."
 license = { text = "GPL" }
 classifiers = ["Programming Language :: Python :: 3"]
-urls = { documentation = "https://ts-ess-labjack.lsst.io", repository = "https://github.com/lsst-ts/ts_ess_labjack" }
+urls = { documentation = "https://ts-ess-labjack.lsst.io", source_code = "https://github.com/lsst-ts/ts_ess_labjack" }
 dynamic = ["version"]
 
 [tool.setuptools.dynamic]

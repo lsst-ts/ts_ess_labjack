@@ -31,6 +31,7 @@ from typing import TypeAlias
 import numpy as np
 import pytest
 import yaml
+
 from lsst.ts import salobj
 from lsst.ts.ess import common, labjack
 
@@ -49,9 +50,7 @@ LOCATION_STRING = "none, here"
 class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.log = logging.getLogger()
-        self.data_dir = (
-            pathlib.Path(__file__).parent / "data" / "config" / "data_client"
-        )
+        self.data_dir = pathlib.Path(__file__).parent / "data" / "config" / "data_client"
 
         config_schema = labjack.LabJackDataClient.get_config_schema()
         self.validator = salobj.DefaultingValidator(config_schema)
@@ -129,10 +128,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
             converted_values = []
             # Apply the corresponding offset and scale to each value.
             for i in range(len(data_client.mock_raw_data)):
-                converted_values.append(
-                    (data_client.mock_raw_data[i] - config.offsets[i])
-                    * config.scales[i]
-                )
+                converted_values.append((data_client.mock_raw_data[i] - config.offsets[i]) * config.scales[i])
 
             await data_client.start()
             assert data_client.handle is not None
@@ -148,9 +144,7 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
 
             assert topics.tel_pressure.data.sensorName == config.sensor_name
             for i in range(len(converted_values)):
-                assert converted_values[i] == pytest.approx(
-                    topics.tel_pressure.data.pressureItem[i]
-                )
+                assert converted_values[i] == pytest.approx(topics.tel_pressure.data.pressureItem[i])
             self.check_event(topics.evt_sensorStatus, config.sensor_name, 0, 0)
             self.log.debug("WOUTER done.")
 
@@ -183,26 +177,17 @@ class DataClientTestCase(unittest.IsolatedAsyncioTestCase):
             assert topics.tel_airTurbulence.data.sensorName == config.sensor_name
             for i in range(3):
                 assert -5.0 <= topics.tel_airTurbulence.data.speed[i] <= -3.0
-                assert topics.tel_airTurbulence.data.speedStdDev[i] == pytest.approx(
-                    0.0
-                )
+                assert topics.tel_airTurbulence.data.speedStdDev[i] == pytest.approx(0.0)
             speed = topics.tel_airTurbulence.data.speed
             speed_magnitude = np.sqrt(speed[0] ** 2 + speed[1] ** 2 + speed[2] ** 2)
-            assert np.isclose(
-                topics.tel_airTurbulence.data.speedMagnitude, speed_magnitude
-            )
+            assert np.isclose(topics.tel_airTurbulence.data.speedMagnitude, speed_magnitude)
             assert 5.0 <= topics.tel_airTurbulence.data.speedMaxMagnitude <= 10.0
             assert -30.0 <= topics.tel_airTurbulence.data.sonicTemperature <= -10.0
-            assert (
-                topics.tel_airTurbulence.data.sonicTemperatureStdDev
-                == pytest.approx(0.0)
-            )
+            assert topics.tel_airTurbulence.data.sonicTemperatureStdDev == pytest.approx(0.0)
             self.check_event(topics.evt_sensorStatus, config.sensor_name, 0, 0)
 
     async def test_registry(self) -> None:
-        data_client_class = common.data_client.get_data_client_class(
-            "LabJackDataClient"
-        )
+        data_client_class = common.data_client.get_data_client_class("LabJackDataClient")
         assert data_client_class is labjack.LabJackDataClient
 
     def check_event(
