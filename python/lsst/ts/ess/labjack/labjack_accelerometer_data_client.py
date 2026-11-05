@@ -284,7 +284,10 @@ additionalProperties: false
     async def run(self) -> None:
         """Read and process data from the LabJack."""
         await self.start_data_stream()
-        await asyncio.Future()
+        try:
+            await asyncio.Future()
+        except asyncio.CancelledError:
+            self.log.warning("Ignoring a CancelledError.")
 
     async def read_data(self) -> None:
         """Read data.
