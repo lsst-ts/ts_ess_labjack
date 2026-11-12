@@ -8,6 +8,27 @@ Version History
 
 .. towncrier release notes start
 
+v1.3.2 (2026-11-12)
+===================
+
+Bug Fixes
+---------
+
+- Added ignoring a CancelledError in LabJackAccelerometerDataClient. (`SSW-3160 <https://rubinobs.atlassian.net//browse/SSW-3160>`_)
+
+
+Performance Enhancement
+-----------------------
+
+- In setup.py set local scheme to no local version. (`SSW-3097 <https://rubinobs.atlassian.net//browse/SSW-3097>`_)
+
+
+Other Changes and Additions
+---------------------------
+
+- Updated all Python license headers. (`OSW-2863 <https://rubinobs.atlassian.net//browse/OSW-2863>`_)
+
+
 v1.3.1 (2026-01-28)
 ===================
 

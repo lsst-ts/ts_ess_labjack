@@ -1,1 +1,0 @@
-Added ignoring a CancelledError in LabJackAccelerometerDataClient.
